@@ -1,0 +1,8 @@
+**Why did we fail to use Logiwa Putaway algo?**
+For a few reasons: Logiwa Legacy had limited configurability and didn't allow changes to be made in real-time. We were forced to create support tickets if algo updates were required, which could take several days. Rule visibility was also a concern as there was no way to see the backend configs that Logiwa ostensibly implemented -- testing/validation of new rule sets delayed things further. When sites began inbounding new volume/merchants, the put-away recommendations became inaccurate because they weren't capacity-aware. Optimizing for put-path ie using walking path priority alone, without capacity-awareness, leads to sub-optimal results. At the time (~2024), product dims accuracy was poor, which compounded the issue. In Logiwa legacy, separate zone sets for put-away and picking also caused the "zone-affinity" approach to fail. For this method to work, there has to be perfect symmetry between the two - this was more of a Logiwa limitation. Logiwa IO solves some of the gaps but the put-away UI/UX introduces several unnecessary touches (these are in the process of being fixed in Q1 based on Flexport's feedback).
+
+**Should we consider qty as an input to the putaway rules engine?** 
+Volumetrics will be used to find the closest candidate location that fits all items in a case. In MVP, because we don't account for compressibility and orientation factors yet, we optimize for max absorption first. This should also help reduce total travel time.
+
+Can stowers override Constraints? 
+How to make sure the remaining units prioritize the last stow location (vs the recommended locations per the putaway rules)? 
