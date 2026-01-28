@@ -104,7 +104,7 @@ export default function OrderBySelector({ orderBy, onChange, disabled = false })
                 <option value="">Select Strategy...</option>
                 {SORT_STRATEGIES.map(s => (
                   <option key={s.value} value={s.value}>
-                    {s.label}
+                    {s.label}{s.requiresCartContext ? ' (requires cart context)' : ''}
                   </option>
                 ))}
               </select>
@@ -122,9 +122,19 @@ export default function OrderBySelector({ orderBy, onChange, disabled = false })
 
             {/* Strategy Description */}
             {orderBy.primary.field && (
-              <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">
-                {SORT_STRATEGIES.find(s => s.value === orderBy.primary.field)?.description}
-              </div>
+              <>
+                <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">
+                  {SORT_STRATEGIES.find(s => s.value === orderBy.primary.field)?.description}
+                </div>
+                {SORT_STRATEGIES.find(s => s.value === orderBy.primary.field)?.requiresCartContext && (
+                  <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded flex items-start gap-2">
+                    <HelpCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Cart Context Required:</strong> This strategy only applies when processing cart transactions with lastPutLocation coordinates. If cart context is missing, this preference will be skipped and the engine will cascade to the next enabled preference.
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -163,7 +173,7 @@ export default function OrderBySelector({ orderBy, onChange, disabled = false })
                 <option value="">Select Strategy...</option>
                 {availableForSecondary.map(s => (
                   <option key={s.value} value={s.value}>
-                    {s.label}
+                    {s.label}{s.requiresCartContext ? ' (requires cart context)' : ''}
                   </option>
                 ))}
               </select>
@@ -181,9 +191,19 @@ export default function OrderBySelector({ orderBy, onChange, disabled = false })
 
             {/* Strategy Description */}
             {orderBy.secondary.field && (
-              <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">
-                {SORT_STRATEGIES.find(s => s.value === orderBy.secondary.field)?.description}
-              </div>
+              <>
+                <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">
+                  {SORT_STRATEGIES.find(s => s.value === orderBy.secondary.field)?.description}
+                </div>
+                {SORT_STRATEGIES.find(s => s.value === orderBy.secondary.field)?.requiresCartContext && (
+                  <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded flex items-start gap-2">
+                    <HelpCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Cart Context Required:</strong> This strategy only applies when processing cart transactions with lastPutLocation coordinates. If cart context is missing, this preference will be skipped and the engine will cascade to the next enabled preference.
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
