@@ -7,6 +7,7 @@
  */
 
 import { logDefect, DefectType, FailurePoint } from './defectLogger.js';
+import { calculateDistance } from '../data/mockData.js';
 
 /**
  * Main entry point for putaway execution
@@ -260,6 +261,12 @@ function executePreferences(product, transactionType, locations, preferences, ca
     // Cart Consolidation Check (Follow the Leader)
     if (preference.cartConsolidation && cartContext.lastPutLocation) {
       const lastLoc = locations.find(loc => loc.id === cartContext.lastPutLocation);
+
+      // Store location object for proximity calculations
+      product._cartContext = {
+        lastPutLocation: cartContext.lastPutLocation,
+        _lastLocationObject: lastLoc
+      };
 
       if (lastLoc && hasCapacity(lastLoc, product)) {
         logs.push({
@@ -557,6 +564,24 @@ function compareByStrategy(locA, locB, strategy, direction, product) {
       scoreA = locA.bin_capacity;
       scoreB = locB.bin_capacity;
       direction = 'asc'; // Force ASC
+      break;
+
+    case 'proximity_last_location':
+      // Sort by distance from last put location
+      // Only applies when cartContext.lastPutLocation exists
+      if (!product._cartContext?.lastPutLocation) {
+        // No last location - treat all as equal (skip this orderBy)
+        return 0;
+      }
+
+      const lastLocation = product._cartContext._lastLocationObject;
+      if (!lastLocation) {
+        return 0;
+      }
+
+      scoreA = calculateDistance(locA, lastLocation);
+      scoreB = calculateDistance(locB, lastLocation);
+      direction = 'asc'; // Closer is better
       break;
 
     default:
