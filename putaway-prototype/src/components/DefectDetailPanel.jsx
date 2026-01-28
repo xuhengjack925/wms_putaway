@@ -7,8 +7,8 @@ export default function DefectDetailPanel({ defect, onClose }) {
 
   if (!defect) return null;
 
-  const isZeroLocation = defect.defectType === DefectType.ZERO_LOCATIONS;
-  const isOverride = defect.defectType === DefectType.STOWER_OVERRIDE;
+  const isZeroLocation = defect.defect_type === DefectType.ZERO_LOCATIONS;
+  const isOverride = defect.defect_type === DefectType.STOWER_OVERRIDE;
 
   const validLocationsToShow = showAllLocations
     ? defect.valid_locations
@@ -34,7 +34,7 @@ export default function DefectDetailPanel({ defect, onClose }) {
             )}
             <div>
               <h2 className="text-xl font-bold text-slate-800">
-                Defect Details: {defect.id}
+                Defect Details: {defect.defect_id}
               </h2>
               <p className="text-sm text-slate-600">
                 {new Date(defect.timestamp).toLocaleString()}
@@ -57,16 +57,16 @@ export default function DefectDetailPanel({ defect, onClose }) {
             <div className="bg-slate-50 rounded-lg p-4 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-slate-600 uppercase font-semibold mb-1">Product ID</p>
-                <p className="text-sm font-mono text-slate-900">{defect.productId}</p>
+                <p className="text-sm font-mono text-slate-900">{defect.product_id}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-600 uppercase font-semibold mb-1">Transaction Type</p>
-                <p className="text-sm text-slate-900">{defect.transactionType}</p>
+                <p className="text-sm text-slate-900">{defect.transaction_type}</p>
               </div>
-              {defect.stowerId && (
+              {defect.stower_id && (
                 <div>
                   <p className="text-xs text-slate-600 uppercase font-semibold mb-1">Stower ID</p>
-                  <p className="text-sm font-mono text-slate-900">{defect.stowerId}</p>
+                  <p className="text-sm font-mono text-slate-900">{defect.stower_id}</p>
                 </div>
               )}
               <div>
@@ -82,11 +82,11 @@ export default function DefectDetailPanel({ defect, onClose }) {
             </div>
 
             {/* Product Attributes */}
-            {defect.context?.product_attributes && (
+            {defect.product_attributes && (
               <div className="mt-4 bg-blue-50 rounded-lg p-4">
                 <p className="text-xs text-blue-800 uppercase font-semibold mb-2">Product Attributes</p>
                 <div className="grid grid-cols-3 gap-3">
-                  {Object.entries(defect.context.product_attributes).map(([key, value]) => (
+                  {Object.entries(defect.product_attributes).map(([key, value]) => (
                     <div key={key}>
                       <p className="text-xs text-blue-700 font-medium capitalize">
                         {key.replace(/_/g, ' ')}
@@ -108,23 +108,23 @@ export default function DefectDetailPanel({ defect, onClose }) {
 
               {/* Failure Point Indicator */}
               <div className={`mb-4 p-3 rounded-lg ${
-                defect.failurePoint === FailurePoint.PHASE_1
+                defect.failure_point === FailurePoint.PHASE_1
                   ? 'bg-red-50 border border-red-200'
                   : 'bg-yellow-50 border border-yellow-200'
               }`}>
                 <p className={`text-sm font-semibold ${
-                  defect.failurePoint === FailurePoint.PHASE_1
+                  defect.failure_point === FailurePoint.PHASE_1
                     ? 'text-red-800'
                     : 'text-yellow-800'
                 }`}>
-                  Failure Point: {defect.failurePoint === FailurePoint.PHASE_1 ? 'Phase 1 - Hard Constraints' : 'Phase 2 - Preferences'}
+                  Failure Point: {defect.failure_point === FailurePoint.PHASE_1 ? 'Phase 1 - Hard Constraints' : 'Phase 2 - Preferences'}
                 </p>
                 <p className={`text-xs mt-1 ${
-                  defect.failurePoint === FailurePoint.PHASE_1
+                  defect.failure_point === FailurePoint.PHASE_1
                     ? 'text-red-700'
                     : 'text-yellow-700'
                 }`}>
-                  {defect.failurePoint === FailurePoint.PHASE_1
+                  {defect.failure_point === FailurePoint.PHASE_1
                     ? 'No valid locations remained after applying constraints'
                     : 'Constraints passed but no preferences could be satisfied'}
                 </p>
@@ -133,18 +133,20 @@ export default function DefectDetailPanel({ defect, onClose }) {
               {/* Rule Trace Steps */}
               <div className="space-y-3">
                 {defect.rule_trace.map((trace, idx) => {
-                  const isPhase1 = trace.phase === 1;
-                  const isFailureStep = trace.locations_after === 0;
+                  const isConstraint = trace.rule_type === 'constraint';
+                  const isPreference = trace.rule_type === 'preference';
+                  const isFailureStep = isConstraint && trace.locations_after === 0;
+                  const noMatchFound = isPreference && trace.candidates_found === 0;
 
                   return (
                     <div
                       key={idx}
                       className={`rounded-lg border-2 p-4 ${
-                        isPhase1
+                        isConstraint
                           ? isFailureStep
                             ? 'bg-red-50 border-red-300'
                             : 'bg-red-50 border-red-200'
-                          : isFailureStep
+                          : noMatchFound
                             ? 'bg-yellow-50 border-yellow-300'
                             : 'bg-yellow-50 border-yellow-200'
                       }`}
@@ -154,15 +156,20 @@ export default function DefectDetailPanel({ defect, onClose }) {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                              isPhase1
+                              isConstraint
                                 ? 'bg-red-200 text-red-800'
                                 : 'bg-yellow-200 text-yellow-800'
                             }`}>
-                              Phase {trace.phase}
+                              {isConstraint ? 'Phase 1 - Constraint' : 'Phase 2 - Preference'}
                             </span>
                             <span className="font-semibold text-slate-900">
                               {trace.rule_name}
                             </span>
+                            {!trace.product_matched && (
+                              <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs">
+                                Skipped
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-slate-600 mt-1 font-mono">
                             {trace.rule_id}
@@ -175,117 +182,102 @@ export default function DefectDetailPanel({ defect, onClose }) {
                         )}
                       </div>
 
-                      {/* Location Counts */}
-                      <div className="flex items-center gap-4 mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-600 font-medium">Before:</span>
-                          <span className="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-sm font-bold">
-                            {trace.locations_before}
-                          </span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-600 font-medium">After:</span>
-                          <span className={`px-2 py-0.5 rounded font-mono text-sm font-bold ${
-                            trace.locations_after === 0
-                              ? 'bg-red-200 text-red-900'
-                              : 'bg-green-200 text-green-900'
-                          }`}>
-                            {trace.locations_after}
-                          </span>
-                        </div>
-                        {trace.eliminated_count > 0 && (
-                          <>
-                            <span className="text-slate-400">|</span>
-                            <span className="text-xs text-slate-600">
-                              Eliminated: <span className="font-bold text-slate-800">{trace.eliminated_count}</span>
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Failure Indicator */}
-                      {isFailureStep && (
-                        <div className={`p-2 rounded ${
-                          isPhase1 ? 'bg-red-100' : 'bg-yellow-100'
-                        }`}>
-                          <p className={`text-sm font-semibold flex items-center gap-2 ${
-                            isPhase1 ? 'text-red-800' : 'text-yellow-800'
-                          }`}>
-                            <AlertCircle className="w-4 h-4" />
-                            {trace.reason}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Condition Details */}
-                      {trace.condition && (
-                        <div className="mt-3 p-3 bg-white rounded border border-slate-200">
-                          <p className="text-xs text-slate-600 font-semibold mb-2">Rule Condition:</p>
-                          <div className="space-y-1 text-xs font-mono">
-                            <div>
-                              <span className="text-purple-600 font-bold">IF:</span>{' '}
-                              <span className="text-slate-800">
-                                {JSON.stringify(trace.condition.if, null, 2)}
+                      {/* Only show details if product matched */}
+                      {trace.product_matched && (
+                        <>
+                          {/* Constraint - Location Counts */}
+                          {isConstraint && (
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-600 font-medium">Before:</span>
+                                <span className="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-sm font-bold">
+                                  {trace.locations_before}
+                                </span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-slate-400" />
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-600 font-medium">After:</span>
+                                <span className={`px-2 py-0.5 rounded font-mono text-sm font-bold ${
+                                  trace.locations_after === 0
+                                    ? 'bg-red-200 text-red-900'
+                                    : 'bg-green-200 text-green-900'
+                                }`}>
+                                  {trace.locations_after}
+                                </span>
+                              </div>
+                              <span className="text-slate-400">|</span>
+                              <span className="text-xs text-slate-600">
+                                Action: <span className="font-bold text-slate-800">{trace.action}</span>
                               </span>
                             </div>
-                            <div>
-                              <span className="text-blue-600 font-bold">THEN:</span>{' '}
-                              <span className="text-slate-800">
-                                {JSON.stringify(trace.condition.then, null, 2)}
-                              </span>
+                          )}
+
+                          {/* Preference - Candidates Found */}
+                          {isPreference && (
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-600 font-medium">Candidates Found:</span>
+                                <span className={`px-2 py-0.5 rounded font-mono text-sm font-bold ${
+                                  trace.candidates_found === 0
+                                    ? 'bg-red-200 text-red-900'
+                                    : 'bg-green-200 text-green-900'
+                                }`}>
+                                  {trace.candidates_found}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          )}
+
+                          {/* Failure Indicator */}
+                          {(isFailureStep || noMatchFound) && (
+                            <div className={`p-2 rounded ${
+                              isConstraint ? 'bg-red-100' : 'bg-yellow-100'
+                            }`}>
+                              <p className={`text-sm font-semibold flex items-center gap-2 ${
+                                isConstraint ? 'text-red-800' : 'text-yellow-800'
+                              }`}>
+                                <AlertCircle className="w-4 h-4" />
+                                {isFailureStep
+                                  ? 'All locations eliminated - putaway failed'
+                                  : 'No matching locations - falling through to next preference'}
+                              </p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   );
                 })}
               </div>
-
-              {/* Failure Analysis */}
-              {defect.context?.failure_analysis && (
-                <div className="mt-4 p-4 bg-slate-100 rounded-lg border border-slate-300">
-                  <p className="text-xs text-slate-700 uppercase font-semibold mb-1">
-                    Failure Analysis
-                  </p>
-                  <p className="text-sm text-slate-800">
-                    {defect.context.failure_analysis}
-                  </p>
-                </div>
-              )}
             </section>
           )}
 
           {/* Location Context Section */}
-          {isOverride && (
+          {(defect.recommended_location || defect.actual_location || (defect.valid_locations && defect.valid_locations.length > 0)) && (
             <section>
               <h3 className="text-lg font-semibold text-slate-800 mb-3">Location Context</h3>
               <div className="space-y-4">
-                {/* Recommended vs Actual */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <p className="text-xs text-green-700 uppercase font-semibold mb-2">
-                      Recommended Location
-                    </p>
-                    <p className="text-lg font-mono font-bold text-green-900">
-                      {defect.recommended_location || 'N/A'}
-                    </p>
-                    {defect.context?.recommendation_score && (
-                      <p className="text-xs text-green-700 mt-1">
-                        Score: {(defect.context.recommendation_score * 100).toFixed(0)}%
+                {/* Recommended vs Actual - Only for overrides */}
+                {isOverride && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <p className="text-xs text-green-700 uppercase font-semibold mb-2">
+                        Recommended Location
                       </p>
-                    )}
+                      <p className="text-lg font-mono font-bold text-green-900">
+                        {defect.recommended_location || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                      <p className="text-xs text-yellow-700 uppercase font-semibold mb-2">
+                        Actual Location (Override)
+                      </p>
+                      <p className="text-lg font-mono font-bold text-yellow-900">
+                        {defect.actual_location || 'N/A'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                    <p className="text-xs text-yellow-700 uppercase font-semibold mb-2">
-                      Actual Location (Override)
-                    </p>
-                    <p className="text-lg font-mono font-bold text-yellow-900">
-                      {defect.actual_location || 'N/A'}
-                    </p>
-                  </div>
-                </div>
+                )}
 
                 {/* Valid Locations List */}
                 {defect.valid_locations && defect.valid_locations.length > 0 && (
@@ -326,7 +318,7 @@ export default function DefectDetailPanel({ defect, onClose }) {
           )}
 
           {/* Override Context Section */}
-          {isOverride && defect.overrideReason && (
+          {isOverride && defect.override_reason && (
             <section>
               <h3 className="text-lg font-semibold text-slate-800 mb-3">Override Context</h3>
               <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
@@ -335,16 +327,16 @@ export default function DefectDetailPanel({ defect, onClose }) {
                     Reason Code
                   </p>
                   <span className="inline-block px-3 py-1 bg-yellow-200 text-yellow-900 rounded-lg font-semibold text-sm">
-                    {OverrideReasonCodes.find(r => r.code === defect.overrideReason)?.label || defect.overrideReason}
+                    {OverrideReasonCodes.find(r => r.code === defect.override_reason)?.label || defect.override_reason}
                   </span>
                 </div>
-                {defect.context?.override_notes && (
+                {defect.override_reason_text && (
                   <div>
                     <p className="text-xs text-yellow-700 uppercase font-semibold mb-1">
                       Notes
                     </p>
                     <p className="text-sm text-yellow-900">
-                      {defect.context.override_notes}
+                      {defect.override_reason_text}
                     </p>
                   </div>
                 )}
@@ -353,80 +345,71 @@ export default function DefectDetailPanel({ defect, onClose }) {
           )}
 
           {/* Matched Rules Section */}
-          {defect.context?.active_constraints || defect.context?.active_preferences ? (
+          {(defect.rule_trace && defect.rule_trace.length > 0) || defect.winning_preference ? (
             <section>
-              <h3 className="text-lg font-semibold text-slate-800 mb-3">Matched Rules</h3>
+              <h3 className="text-lg font-semibold text-slate-800 mb-3">Matched Rules Summary</h3>
               <div className="space-y-3">
-                {defect.context.active_constraints && defect.context.active_constraints.length > 0 && (
-                  <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                    <p className="text-xs text-red-700 uppercase font-semibold mb-2">
-                      Applied Constraints
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {defect.context.active_constraints.map((ruleId, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-red-200 text-red-900 rounded font-mono text-xs"
-                        >
-                          {ruleId}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                {defect.rule_trace && defect.rule_trace.length > 0 && (
+                  <>
+                    {/* Constraints */}
+                    {defect.rule_trace.filter(r => r.rule_type === 'constraint' && r.product_matched).length > 0 && (
+                      <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                        <p className="text-xs text-red-700 uppercase font-semibold mb-2">
+                          Applied Constraints
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {defect.rule_trace
+                            .filter(r => r.rule_type === 'constraint' && r.product_matched)
+                            .map((rule, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-red-200 text-red-900 rounded font-mono text-xs"
+                              >
+                                {rule.rule_name}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preferences */}
+                    {defect.rule_trace.filter(r => r.rule_type === 'preference' && r.product_matched).length > 0 && (
+                      <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                        <p className="text-xs text-emerald-700 uppercase font-semibold mb-2">
+                          Attempted Preferences
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {defect.rule_trace
+                            .filter(r => r.rule_type === 'preference' && r.product_matched)
+                            .map((rule, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-emerald-200 text-emerald-900 rounded font-mono text-xs"
+                              >
+                                Priority #{rule.priority}: {rule.rule_name}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-                {defect.context.active_preferences && defect.context.active_preferences.length > 0 && (
-                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
-                    <p className="text-xs text-emerald-700 uppercase font-semibold mb-2">
-                      Applied Preferences
+
+                {/* Winning Preference for Overrides */}
+                {isOverride && defect.winning_preference && (
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <p className="text-xs text-green-700 uppercase font-semibold mb-2">
+                      Winning Preference
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {defect.context.active_preferences.map((ruleId, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-emerald-200 text-emerald-900 rounded font-mono text-xs"
-                        >
-                          {ruleId}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="px-2 py-1 bg-green-200 text-green-900 rounded font-mono text-xs">
+                      {defect.winning_preference}
+                    </span>
                   </div>
                 )}
               </div>
             </section>
           ) : null}
 
-          {/* Debug Context (Warehouse Details) */}
-          {defect.context?.warehouse_id && (
-            <section>
-              <h3 className="text-lg font-semibold text-slate-800 mb-3">Context Details</h3>
-              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-slate-600 uppercase font-semibold mb-1">
-                      Warehouse ID
-                    </p>
-                    <p className="font-mono text-slate-900">{defect.context.warehouse_id}</p>
-                  </div>
-                  {defect.context.total_locations_available !== undefined && (
-                    <div>
-                      <p className="text-xs text-slate-600 uppercase font-semibold mb-1">
-                        Total Locations Available
-                      </p>
-                      <p className="font-mono text-slate-900">{defect.context.total_locations_available}</p>
-                    </div>
-                  )}
-                  {defect.context.locations_after_constraints !== undefined && (
-                    <div>
-                      <p className="text-xs text-slate-600 uppercase font-semibold mb-1">
-                        Locations After Constraints
-                      </p>
-                      <p className="font-mono text-slate-900">{defect.context.locations_after_constraints}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
         </div>
       </div>
     </>

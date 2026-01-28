@@ -44,31 +44,34 @@ export function generateUUID() {
  * Logs a defect to localStorage
  *
  * @param {Object} defectData - The defect data to log
- * @param {string} defectData.defectType - Type of defect (DefectType)
- * @param {string} defectData.productId - Product ID
- * @param {string} defectData.transactionType - Transaction type
- * @param {string} [defectData.failurePoint] - Failure point (for ZERO_LOCATIONS)
+ * @param {string} defectData.defect_type - Type of defect (DefectType)
+ * @param {string} defectData.product_id - Product ID
+ * @param {string} defectData.transaction_type - Transaction type
+ * @param {string} [defectData.failure_point] - Failure point (for ZERO_LOCATIONS)
  * @param {Array} [defectData.rule_trace] - Rule trace (for ZERO_LOCATIONS)
- * @param {string} [defectData.stowerId] - Stower ID (for STOWER_OVERRIDE)
- * @param {string} [defectData.overrideReason] - Override reason code (for STOWER_OVERRIDE)
+ * @param {Object} [defectData.product_attributes] - Product attributes
+ * @param {string} [defectData.stower_id] - Stower ID (for STOWER_OVERRIDE)
+ * @param {string} [defectData.override_reason] - Override reason code (for STOWER_OVERRIDE)
+ * @param {string} [defectData.override_reason_text] - Override reason text (for STOWER_OVERRIDE)
  * @param {Array} [defectData.valid_locations] - Valid locations (for STOWER_OVERRIDE)
  * @param {string} [defectData.recommended_location] - Recommended location (for STOWER_OVERRIDE)
  * @param {string} [defectData.actual_location] - Actual location chosen (for STOWER_OVERRIDE)
- * @returns {Object} The logged defect with id and timestamp
+ * @param {string} [defectData.winning_preference] - Winning preference (for STOWER_OVERRIDE)
+ * @returns {Object} The logged defect with defect_id and timestamp
  */
 export function logDefect(defectData) {
   // Validate required fields
-  if (!defectData.defectType || !defectData.productId || !defectData.transactionType) {
-    throw new Error('Missing required defect fields: defectType, productId, transactionType are required');
+  if (!defectData.defect_type || !defectData.product_id || !defectData.transaction_type) {
+    throw new Error('Missing required defect fields: defect_type, product_id, transaction_type are required');
   }
 
-  // Validate defectType enum
-  if (!Object.values(DefectType).includes(defectData.defectType)) {
-    throw new Error(`Invalid defectType: ${defectData.defectType}. Must be one of: ${Object.values(DefectType).join(', ')}`);
+  // Validate defect_type enum
+  if (!Object.values(DefectType).includes(defectData.defect_type)) {
+    throw new Error(`Invalid defect_type: ${defectData.defect_type}. Must be one of: ${Object.values(DefectType).join(', ')}`);
   }
 
   const defect = {
-    id: generateUUID(),
+    defect_id: generateUUID(),
     timestamp: new Date().toISOString(),
     ...defectData
   };
@@ -119,10 +122,10 @@ export function clearDefects() {
  * Filters defects based on provided criteria
  *
  * @param {Object} filters - Filter criteria
- * @param {string} [filters.defectType] - Filter by defect type
- * @param {string} [filters.productId] - Filter by product ID
- * @param {string} [filters.transactionType] - Filter by transaction type
- * @param {string} [filters.stowerId] - Filter by stower ID
+ * @param {string} [filters.defect_type] - Filter by defect type
+ * @param {string} [filters.product_id] - Filter by product ID
+ * @param {string} [filters.transaction_type] - Filter by transaction type
+ * @param {string} [filters.stower_id] - Filter by stower ID
  * @param {Object} [filters.dateRange] - Filter by date range
  * @param {Date|string} [filters.dateRange.start] - Start date
  * @param {Date|string} [filters.dateRange.end] - End date
@@ -131,20 +134,20 @@ export function clearDefects() {
 export function filterDefects(filters = {}) {
   let defects = getDefects();
 
-  if (filters.defectType) {
-    defects = defects.filter(d => d.defectType === filters.defectType);
+  if (filters.defect_type) {
+    defects = defects.filter(d => d.defect_type === filters.defect_type);
   }
 
-  if (filters.productId) {
-    defects = defects.filter(d => d.productId === filters.productId);
+  if (filters.product_id) {
+    defects = defects.filter(d => d.product_id === filters.product_id);
   }
 
-  if (filters.transactionType) {
-    defects = defects.filter(d => d.transactionType === filters.transactionType);
+  if (filters.transaction_type) {
+    defects = defects.filter(d => d.transaction_type === filters.transaction_type);
   }
 
-  if (filters.stowerId) {
-    defects = defects.filter(d => d.stowerId === filters.stowerId);
+  if (filters.stower_id) {
+    defects = defects.filter(d => d.stower_id === filters.stower_id);
   }
 
   if (filters.dateRange) {

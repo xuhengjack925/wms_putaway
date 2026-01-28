@@ -19,10 +19,10 @@ const escapeCSV = (value) => {
 export default function DefectsView() {
   const [selectedDefect, setSelectedDefect] = useState(null);
   const [filters, setFilters] = useState({
-    defectType: '',
-    productId: '',
-    transactionType: '',
-    stowerId: '',
+    defect_type: '',
+    product_id: '',
+    transaction_type: '',
+    stower_id: '',
     dateRange: {
       start: new Date(Date.now() - 7 * DAYS_IN_MS), // Last 7 days
       end: new Date()
@@ -60,7 +60,7 @@ export default function DefectsView() {
       escapeCSV(d.stower_id),
       escapeCSV(d.recommended_location || 'N/A'),
       escapeCSV(d.actual_location || 'N/A'),
-      escapeCSV(d.override_reason_code || 'N/A')
+      escapeCSV(d.override_reason || 'N/A')
     ]);
 
     const csv = [headers.map(escapeCSV), ...rows].map(row => row.join(',')).join('\n');
@@ -146,8 +146,8 @@ export default function DefectsView() {
               Defect Type
             </label>
             <select
-              value={filters.defectType}
-              onChange={(e) => setFilters({ ...filters, defectType: e.target.value })}
+              value={filters.defect_type}
+              onChange={(e) => setFilters({ ...filters, defect_type: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             >
               <option value="">All</option>
@@ -162,8 +162,8 @@ export default function DefectsView() {
             </label>
             <input
               type="text"
-              value={filters.productId}
-              onChange={(e) => setFilters({ ...filters, productId: e.target.value })}
+              value={filters.product_id}
+              onChange={(e) => setFilters({ ...filters, product_id: e.target.value })}
               placeholder="SKU-123..."
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             />
@@ -174,8 +174,8 @@ export default function DefectsView() {
               Transaction Type
             </label>
             <select
-              value={filters.transactionType}
-              onChange={(e) => setFilters({ ...filters, transactionType: e.target.value })}
+              value={filters.transaction_type}
+              onChange={(e) => setFilters({ ...filters, transaction_type: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             >
               <option value="">All</option>
@@ -191,8 +191,8 @@ export default function DefectsView() {
             </label>
             <input
               type="text"
-              value={filters.stowerId}
-              onChange={(e) => setFilters({ ...filters, stowerId: e.target.value })}
+              value={filters.stower_id}
+              onChange={(e) => setFilters({ ...filters, stower_id: e.target.value })}
               placeholder="STW-105..."
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             />
@@ -305,8 +305,8 @@ export default function DefectsView() {
                       {defect.actual_location || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">
-                      {defect.override_reason_code
-                        ? OverrideReasonCodes.find(r => r.code === defect.override_reason_code)?.label || defect.override_reason_code
+                      {defect.override_reason
+                        ? OverrideReasonCodes.find(r => r.code === defect.override_reason)?.label || defect.override_reason
                         : '-'}
                     </td>
                   </tr>
