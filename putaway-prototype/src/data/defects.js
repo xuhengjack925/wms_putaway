@@ -56,7 +56,7 @@ export const sampleDefects = [
     productId: 'PROD-67890',
     transactionType: 'Inbound PO',
     stowerId: 'STOWER-42',
-    overrideReason: 'LOCATION_FULL',
+    overrideReason: 'CONGESTION',
     valid_locations: ['LOC-A-001', 'LOC-A-002', 'LOC-B-015'],
     recommended_location: 'LOC-A-001',
     actual_location: 'LOC-B-015',

@@ -22,11 +22,11 @@ export const FailurePoint = {
 
 // Override Reason Codes (for STOWER_OVERRIDE defects)
 export const OverrideReasonCodes = [
-  { code: 'LOCATION_FULL', label: 'Recommended location is full' },
-  { code: 'LOCATION_DAMAGED', label: 'Recommended location is damaged' },
-  { code: 'PROXIMITY_PREFERENCE', label: 'Chosen location is closer' },
-  { code: 'BATCH_CONSOLIDATION', label: 'Consolidating with existing batch' },
-  { code: 'OTHER', label: 'Other reason' }
+  { code: 'BIN_DAMAGED', label: 'Bin damaged/blocked' },
+  { code: 'CONGESTION', label: 'Congestion/traffic' },
+  { code: 'CLOSER_STAGING', label: 'Closer to staging area' },
+  { code: 'BETTER_ERGONOMICS', label: 'Better ergonomics' },
+  { code: 'OTHER', label: 'Other' }
 ];
 
 /**
