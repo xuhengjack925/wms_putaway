@@ -179,6 +179,12 @@ export const SORT_STRATEGIES = [
     requiresAisle: true
   },
   {
+    value: 'proximity_last_location',
+    label: 'Proximity to Last Location',
+    description: 'Sort by distance from last put location (travel optimization)',
+    requiresCartContext: true
+  },
+  {
     value: 'location_level_asc',
     label: 'Fill Bottom Levels First',
     description: 'Sort by level ASC (ergonomics/safety)'
