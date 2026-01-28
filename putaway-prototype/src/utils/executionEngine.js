@@ -315,17 +315,17 @@ function executePreferences(product, transactionType, locations, preferences, ca
     });
 
     // Apply Sorting
-    if (preference.orderBy?.primary?.field) {
+    if (preference.orderBy && preference.orderBy.length > 0 && preference.orderBy[0]?.field) {
       candidates = sortLocations(candidates, preference.orderBy, product);
 
       const top3 = candidates.slice(0, 3).map(c => c.id);
+      const sortStrategies = preference.orderBy.map(o => o.field).filter(Boolean).join(', ');
       logs.push({
         phase: 2,
         type: 'info',
-        message: `Sorted by ${preference.orderBy.primary.field} (${preference.orderBy.primary.direction})`,
+        message: `Sorted by ${sortStrategies}`,
         details: {
-          primarySort: preference.orderBy.primary.field,
-          secondarySort: preference.orderBy.secondary?.field,
+          sortStrategies: preference.orderBy.map(o => o.field).filter(Boolean),
           top3Candidates: top3
         }
       });
@@ -472,28 +472,20 @@ function hasCapacity(location, product) {
  */
 function sortLocations(locations, orderBy, product) {
   return locations.sort((a, b) => {
-    // Primary sort
-    if (orderBy.primary?.field) {
-      const primaryDiff = compareByStrategy(
-        a, b,
-        orderBy.primary.field,
-        orderBy.primary.direction,
-        product
-      );
+    // Apply each orderBy strategy in sequence
+    if (Array.isArray(orderBy)) {
+      for (const strategy of orderBy) {
+        if (strategy?.field) {
+          const diff = compareByStrategy(
+            a, b,
+            strategy.field,
+            null, // Direction is now determined by strategy
+            product
+          );
 
-      if (primaryDiff !== 0) return primaryDiff;
-    }
-
-    // Secondary sort (tie-breaker)
-    if (orderBy.secondary?.field) {
-      const secondaryDiff = compareByStrategy(
-        a, b,
-        orderBy.secondary.field,
-        orderBy.secondary.direction,
-        product
-      );
-
-      if (secondaryDiff !== 0) return secondaryDiff;
+          if (diff !== 0) return diff;
+        }
+      }
     }
 
     // Final tie-breaker: location_id ASC (deterministic)

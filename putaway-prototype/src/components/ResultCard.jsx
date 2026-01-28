@@ -83,8 +83,8 @@ export default function ResultCard({ result }) {
                 {winningPreference.name}
               </div>
               <div className="text-xs text-slate-500">
-                {winningPreference.orderBy?.primary && (
-                  <span>Sorted by {winningPreference.orderBy.primary.field}</span>
+                {winningPreference.orderBy && winningPreference.orderBy.length > 0 && (
+                  <span>Sorted by {winningPreference.orderBy.map(o => o.field).filter(Boolean).join(', ')}</span>
                 )}
               </div>
             </div>

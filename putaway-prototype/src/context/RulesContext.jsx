@@ -99,10 +99,7 @@ const DEFAULT_PREFERENCES = [
     productCriteria: [],
     locationCriteria: [],
     cartConsolidation: true,
-    orderBy: {
-      primary: null,
-      secondary: null
-    },
+    orderBy: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -119,10 +116,10 @@ const DEFAULT_PREFERENCES = [
       { field: 'bin_status', operator: '=', value: 'PARTIAL' }
     ],
     cartConsolidation: false,
-    orderBy: {
-      primary: { field: 'expiry_affinity', direction: 'desc' },
-      secondary: { field: 'bin_utilization_desc', direction: 'desc' }
-    },
+    orderBy: [
+      { field: 'expiry_affinity' },
+      { field: 'bin_utilization_desc' }
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -139,10 +136,9 @@ const DEFAULT_PREFERENCES = [
       { field: 'zone_id', operator: 'in', value: ['Zone_A_Golden'] }
     ],
     cartConsolidation: false,
-    orderBy: {
-      primary: { field: 'distance_shipping', direction: 'asc' },
-      secondary: null
-    },
+    orderBy: [
+      { field: 'distance_shipping' }
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -157,10 +153,9 @@ const DEFAULT_PREFERENCES = [
       { field: 'bin_status', operator: '=', value: 'EMPTY' }
     ],
     cartConsolidation: false,
-    orderBy: {
-      primary: { field: 'distance_shipping', direction: 'asc' },
-      secondary: null
-    },
+    orderBy: [
+      { field: 'distance_shipping' }
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
@@ -171,14 +166,34 @@ export function RulesProvider({ children }) {
   const [preferences, setPreferences] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Helper to migrate old orderBy format to new array format
+  const migrateOrderBy = (orderBy) => {
+    if (!orderBy) return [];
+    if (Array.isArray(orderBy)) return orderBy;
+
+    // Old format: { primary: {...}, secondary: {...} }
+    const newOrderBy = [];
+    if (orderBy.primary?.field) {
+      newOrderBy.push({ field: orderBy.primary.field });
+    }
+    if (orderBy.secondary?.field) {
+      newOrderBy.push({ field: orderBy.secondary.field });
+    }
+    return newOrderBy;
+  };
+
   // Load from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const migratedPreferences = (parsed.preferences || DEFAULT_PREFERENCES).map(pref => ({
+          ...pref,
+          orderBy: migrateOrderBy(pref.orderBy)
+        }));
         setConstraints(parsed.constraints || DEFAULT_CONSTRAINTS);
-        setPreferences(parsed.preferences || DEFAULT_PREFERENCES);
+        setPreferences(migratedPreferences);
       } else {
         setConstraints(DEFAULT_CONSTRAINTS);
         setPreferences(DEFAULT_PREFERENCES);

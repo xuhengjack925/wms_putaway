@@ -217,13 +217,11 @@ export default function PreferencesList() {
               : preference.locationCriteria
                   .map(c => `${c.field} ${c.operator} ${c.value}`)
                   .join(' AND ')}
-            {preference.orderBy?.primary && (
+            {preference.orderBy && preference.orderBy.length > 0 && (
               <>
                 <br />
                 <span className="font-semibold">SORT BY:</span>{' '}
-                {preference.orderBy.primary.field} ({preference.orderBy.primary.direction})
-                {preference.orderBy.secondary &&
-                  `, then ${preference.orderBy.secondary.field} (${preference.orderBy.secondary.direction})`}
+                {preference.orderBy.map(o => o.field).filter(Boolean).join(', ')}
               </>
             )}
           </div>

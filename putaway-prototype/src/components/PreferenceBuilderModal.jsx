@@ -13,10 +13,7 @@ export default function PreferenceBuilderModal({ isOpen, onClose, rule, onSave }
     productCriteria: [],
     locationCriteria: [],
     cartConsolidation: false,
-    orderBy: {
-      primary: null,
-      secondary: null
-    },
+    orderBy: [],
     enabled: true
   });
 
@@ -26,7 +23,19 @@ export default function PreferenceBuilderModal({ isOpen, onClose, rule, onSave }
   // Update form data when rule prop changes
   useEffect(() => {
     if (rule) {
-      setFormData(rule);
+      // Migrate old format to new array format if needed
+      let migratedRule = { ...rule };
+      if (rule.orderBy && !Array.isArray(rule.orderBy)) {
+        const orderByArray = [];
+        if (rule.orderBy.primary?.field) {
+          orderByArray.push({ field: rule.orderBy.primary.field });
+        }
+        if (rule.orderBy.secondary?.field) {
+          orderByArray.push({ field: rule.orderBy.secondary.field });
+        }
+        migratedRule.orderBy = orderByArray;
+      }
+      setFormData(migratedRule);
     } else {
       setFormData({
         name: '',
@@ -34,10 +43,7 @@ export default function PreferenceBuilderModal({ isOpen, onClose, rule, onSave }
         productCriteria: [],
         locationCriteria: [],
         cartConsolidation: false,
-        orderBy: {
-          primary: null,
-          secondary: null
-        },
+        orderBy: [],
         enabled: true
       });
     }
