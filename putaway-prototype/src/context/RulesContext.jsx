@@ -1,6 +1,4 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { detectAllConflicts } from '../utils/conflictDetection';
-import { MOCK_LOCATIONS, TEST_PRODUCTS } from '../data/mockData';
 
 const RulesContext = createContext();
 
@@ -172,10 +170,6 @@ export function RulesProvider({ children }) {
   const [constraints, setConstraints] = useState([]);
   const [preferences, setPreferences] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [conflicts, setConflicts] = useState({
-    selfConflicts: [],
-    interRuleConflicts: []
-  });
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -212,28 +206,6 @@ export function RulesProvider({ children }) {
     } catch (error) {
       console.error('Failed to save rules to localStorage:', error);
     }
-  }, [constraints, preferences, isLoaded]);
-
-  // Run conflict detection whenever rules change
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    // Simulate async detection (in production, this would be a backend job)
-    const detectConflicts = async () => {
-      // Small delay to simulate async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const detectedConflicts = detectAllConflicts(
-        constraints,
-        preferences,
-        MOCK_LOCATIONS,
-        TEST_PRODUCTS
-      );
-
-      setConflicts(detectedConflicts);
-    };
-
-    detectConflicts();
   }, [constraints, preferences, isLoaded]);
 
   // Constraint operations
@@ -316,7 +288,6 @@ export function RulesProvider({ children }) {
   const value = {
     constraints,
     preferences,
-    conflicts,
     isLoaded,
     addConstraint,
     updateConstraint,
