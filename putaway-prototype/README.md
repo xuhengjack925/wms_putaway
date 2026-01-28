@@ -30,7 +30,7 @@ Try each preference in priority order. Selects optimal location from valid candi
 ✅ **Rule Configuration**
 - Hard Constraints with 10 product fields, 8 location fields
 - Preferences with priority ordering (drag-and-drop)
-- 9 sorting strategies with primary/secondary tie-breaking
+- 10 sorting strategies including proximity-based travel optimization
 - Cart Consolidation ("Follow the Leader")
 - Enable/disable toggles
 - Real-time rule preview
@@ -68,6 +68,7 @@ Try each preference in priority order. Selects optimal location from valid candi
 8. Merchant Clustering
 9. Edge Case: Super Heavy Item (100kg)
 10. Edge Case: Multiple Hazmat Classes
+11. Cart Processing: Proximity Optimization
 
 ## Technology Stack
 
