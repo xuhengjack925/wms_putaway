@@ -6,6 +6,8 @@
  * Phase 2: Preferences (Sorter) - First match wins (OR logic with fall-through)
  */
 
+import { logDefect, DefectType, FailurePoint } from './defectLogger.js';
+
 /**
  * Main entry point for putaway execution
  * @param {Object} product - Product attributes
@@ -157,9 +159,39 @@ function executeConstraints(product, transactionType, locations, constraints, lo
   });
 
   if (validLocations.length === 0) {
+    // Log defect: Phase 1 failure
+    const constraintTrace = activeConstraints.map(c => ({
+      rule_id: c.id,
+      rule_name: c.name,
+      rule_type: 'constraint',
+      action: c.action,
+      product_matched: evaluateCriteria(c.productCriteria, product),
+      locations_before: logs.find(log => log.ruleId === c.id)?.details?.before || 0,
+      locations_after: logs.find(log => log.ruleId === c.id)?.details?.after || 0
+    }));
+
+    logDefect({
+      defect_type: DefectType.ZERO_LOCATIONS,
+      failure_point: FailurePoint.PHASE_1,
+      product_id: product.sku_id,
+      transaction_type: transactionType,
+      rule_trace: constraintTrace,
+      product_attributes: {
+        merchant_id: product.merchant_id,
+        inventory_status: product.inventory_status,
+        pack_type: product.pack_type,
+        abc_code: product.abc_code,
+        is_oversized: product.is_oversized,
+        weight: product.weight,
+        hazmat_class: product.hazmat_class,
+        is_lot_expiry_required: product.is_lot_expiry_required
+      }
+    });
+
     return {
       success: false,
-      error: 'No valid locations after Hard Constraints'
+      error: 'No valid locations after Hard Constraints',
+      defectLogged: true
     };
   }
 
@@ -322,10 +354,40 @@ function executePreferences(product, transactionType, locations, preferences, ca
     details: {}
   });
 
+  // Log defect: Phase 2 failure
+  const preferenceTrace = activePreferences.map(p => ({
+    rule_id: p.id,
+    rule_name: p.name,
+    rule_type: 'preference',
+    priority: p.priority,
+    product_matched: evaluateCriteria(p.productCriteria, product),
+    candidates_found: logs.filter(log => log.ruleId === p.id && log.type === 'info' && log.message.includes('candidates matching scope'))[0]?.details?.candidateCount || 0
+  }));
+
+  logDefect({
+    defect_type: DefectType.ZERO_LOCATIONS,
+    failure_point: FailurePoint.PHASE_2,
+    product_id: product.sku_id,
+    transaction_type: transactionType,
+    rule_trace: preferenceTrace,
+    product_attributes: {
+      merchant_id: product.merchant_id,
+      inventory_status: product.inventory_status,
+      pack_type: product.pack_type,
+      abc_code: product.abc_code,
+      is_oversized: product.is_oversized,
+      weight: product.weight,
+      hazmat_class: product.hazmat_class,
+      is_lot_expiry_required: product.is_lot_expiry_required
+    },
+    valid_locations: locations.map(loc => loc.id)
+  });
+
   return {
     success: false,
     logs,
-    error: 'All preferences exhausted (Fall-through complete)'
+    error: 'All preferences exhausted (Fall-through complete)',
+    defectLogged: true
   };
 }
 
@@ -513,4 +575,46 @@ function calculateMerchantDensity(location, merchantId) {
   // Simplified: Just check if current contents match merchant
   // In production, this would query all bins in same aisle
   return location.current_contents.filter(c => c.merchant_id === merchantId).length;
+}
+
+/**
+ * Simulate Stower Override
+ * Used for testing/demo purposes to log override defects
+ *
+ * @param {Object} executionResult - Result from executePutaway()
+ * @param {Object} product - Product that was assigned
+ * @param {string} transactionType - Transaction type
+ * @param {string} actualLocation - Location stower actually used
+ * @param {string} reasonCode - Override reason code
+ * @param {string} reasonText - Optional text explanation
+ * @returns {Object} - Defect log entry or null if no override occurred
+ */
+export function simulateStowerOverride(executionResult, product, transactionType, actualLocation, reasonCode, reasonText = '') {
+  if (!executionResult.success) {
+    console.warn('Cannot log override for failed putaway execution');
+    return null;
+  }
+
+  const recommendedLocation = executionResult.assignedLocation.id;
+
+  if (actualLocation === recommendedLocation) {
+    console.log('No override detected - stower followed recommendation');
+    return null;
+  }
+
+  // Log override defect
+  return logDefect({
+    defect_type: DefectType.STOWER_OVERRIDE,
+    product_id: product.sku_id,
+    transaction_type: transactionType,
+    stower_id: 'STOWER_001', // In production, this would come from user session
+    override_reason: reasonCode,
+    override_reason_text: reasonText,
+    recommended_location: recommendedLocation,
+    actual_location: actualLocation,
+    valid_locations: executionResult.logs
+      .filter(log => log.phase === 1 && log.type === 'info' && log.message.includes('valid locations remaining'))
+      .map(log => log.details.remaining)[0] || 0,
+    winning_preference: executionResult.winningPreference?.name || 'N/A'
+  });
 }
