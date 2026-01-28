@@ -3,6 +3,19 @@ import { Calendar, Filter, Download, AlertCircle, FileWarning } from 'lucide-rea
 import { getDefects, filterDefects, DefectType, OverrideReasonCodes } from '../utils/defectLogger';
 import DefectDetailPanel from './DefectDetailPanel';
 
+// Constants
+const DAYS_IN_MS = 24 * 60 * 60 * 1000;
+const PAGINATION_PAGE_SIZE = 50;
+
+// CSV Injection Protection
+const escapeCSV = (value) => {
+  const str = String(value ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
 export default function DefectsView() {
   const [selectedDefect, setSelectedDefect] = useState(null);
   const [filters, setFilters] = useState({
@@ -11,7 +24,7 @@ export default function DefectsView() {
     transactionType: '',
     stowerId: '',
     dateRange: {
-      start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+      start: new Date(Date.now() - 7 * DAYS_IN_MS), // Last 7 days
       end: new Date()
     }
   });
@@ -40,23 +53,24 @@ export default function DefectsView() {
   const exportCSV = () => {
     const headers = ['Timestamp', 'Defect Type', 'Product ID', 'Transaction Type', 'Stower', 'Recommended', 'Actual', 'Reason'];
     const rows = defects.map(d => [
-      new Date(d.timestamp).toLocaleString(),
-      d.defect_type,
-      d.product_id,
-      d.transaction_type,
-      d.stower_id,
-      d.recommended_location || 'N/A',
-      d.actual_location || 'N/A',
-      d.override_reason_code || 'N/A'
+      escapeCSV(new Date(d.timestamp).toLocaleString()),
+      escapeCSV(d.defect_type),
+      escapeCSV(d.product_id),
+      escapeCSV(d.transaction_type),
+      escapeCSV(d.stower_id),
+      escapeCSV(d.recommended_location || 'N/A'),
+      escapeCSV(d.actual_location || 'N/A'),
+      escapeCSV(d.override_reason_code || 'N/A')
     ]);
 
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const csv = [headers.map(escapeCSV), ...rows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `putaway-defects-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -194,7 +208,7 @@ export default function DefectsView() {
                 setFilters({
                   ...filters,
                   dateRange: {
-                    start: new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+                    start: new Date(Date.now() - days * DAYS_IN_MS),
                     end: new Date()
                   }
                 });
@@ -253,7 +267,15 @@ export default function DefectsView() {
                   <tr
                     key={defect.defect_id}
                     onClick={() => setSelectedDefect(defect)}
-                    className="hover:bg-slate-50 cursor-pointer transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedDefect(defect);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    className="hover:bg-slate-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
                   >
                     <td className="px-4 py-3 text-sm text-slate-900">
                       {new Date(defect.timestamp).toLocaleString()}
@@ -295,13 +317,13 @@ export default function DefectsView() {
         </div>
 
         {/* Pagination */}
-        {defects.length > 50 && (
+        {defects.length > PAGINATION_PAGE_SIZE && (
           <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
             <p className="text-sm text-slate-600">
-              Showing {Math.min(50, defects.length)} of {defects.length} defects
+              Showing {Math.min(PAGINATION_PAGE_SIZE, defects.length)} of {defects.length} defects
             </p>
             <div className="text-sm text-slate-500">
-              Pagination: 50 records per page (PRD Section 6.3.2)
+              Pagination: {PAGINATION_PAGE_SIZE} records per page (PRD Section 6.3.2)
             </div>
           </div>
         )}
