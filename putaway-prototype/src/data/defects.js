@@ -5,7 +5,7 @@
  * These can be loaded into localStorage for UI development.
  */
 
-import { DefectType, FailurePoint } from '../utils/defectLogger';
+import { DefectType, FailurePoint, STORAGE_KEY } from '../utils/defectLogger';
 
 // Helper to generate timestamps relative to now
 const hoursAgo = (hours) => {
@@ -128,7 +128,7 @@ export const sampleDefects = [
  */
 export function loadSampleDefects() {
   try {
-    const existingData = localStorage.getItem('putaway_defects');
+    const existingData = localStorage.getItem(STORAGE_KEY);
     const existingDefects = existingData ? JSON.parse(existingData) : [];
 
     // Avoid duplicates - only add if ID doesn't exist
@@ -137,7 +137,7 @@ export function loadSampleDefects() {
 
     if (newDefects.length > 0) {
       const updatedDefects = [...existingDefects, ...newDefects];
-      localStorage.setItem('putaway_defects', JSON.stringify(updatedDefects));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDefects));
       console.log(`Loaded ${newDefects.length} sample defects into localStorage`);
     } else {
       console.log('Sample defects already exist in localStorage');

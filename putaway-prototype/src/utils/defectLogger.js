@@ -5,7 +5,7 @@
  * Uses localStorage for persistence.
  */
 
-const STORAGE_KEY = 'putaway_defects';
+export const STORAGE_KEY = 'putaway_defects';
 const DEFAULT_RETENTION_DAYS = 90;
 
 // Defect Types
@@ -57,6 +57,16 @@ export function generateUUID() {
  * @returns {Object} The logged defect with id and timestamp
  */
 export function logDefect(defectData) {
+  // Validate required fields
+  if (!defectData.defectType || !defectData.productId || !defectData.transactionType) {
+    throw new Error('Missing required defect fields: defectType, productId, transactionType are required');
+  }
+
+  // Validate defectType enum
+  if (!Object.values(DefectType).includes(defectData.defectType)) {
+    throw new Error(`Invalid defectType: ${defectData.defectType}. Must be one of: ${Object.values(DefectType).join(', ')}`);
+  }
+
   const defect = {
     id: generateUUID(),
     timestamp: new Date().toISOString(),
@@ -69,8 +79,11 @@ export function logDefect(defectData) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(defects));
   } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn('⚠️ LocalStorage quota exceeded. Consider cleaning old defects or implementing retention cleanup.');
+    }
     console.error('Failed to log defect to localStorage:', error);
-    // Could implement fallback storage strategy here
+    return null;
   }
 
   return defect;
