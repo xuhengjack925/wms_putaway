@@ -1,5 +1,5 @@
 Project Name: Putaway Logic Configuration (The "Funnel" Engine)
-Version: 2.1
+Version: 3.0
 Status: Draft
 
 ## 1. Executive Summary
@@ -10,7 +10,13 @@ It adopts a **Two-Phase Funnel** model to balance compliance with optimization:
 - **Hard Constraints**: Non-negotiable rules that filter out illegal locations.
 - **Preferences**: Prioritized strategies that select the best location from the remaining candidates.
 
-**Target Users**: WMS Subject Matter Experts (Process Engineers, Operations Managers) who understand warehouse operations and can configure rules without engineering support.
+To enable continuous improvement without the complexity of proactive conflict detection, the system includes a **Defect Logging System** that records runtime exceptions where the engine fails to produce usable recommendations or where stowers override system guidance.
+
+**Target Users**:
+- **WMS Subject Matter Experts (Process Engineers)**: Configure rules and tune based on defect feedback
+- **Operations Managers**: Monitor putaway performance and troubleshoot operational issues in real-time
+
+**Core Principle**: Never block warehouse work. When rules fail to produce valid locations, stowers can override with reason codes. The defect log provides visibility into these exceptions, enabling data-driven rule refinement.
 
 ## 2. Architectural Concepts
 
@@ -35,10 +41,10 @@ Every rule (in both phases) must define its **Scope**. The user must specify whi
 
 Fields in the Master Data Dictionary are evaluated at different times:
 
-| Evaluation Time | Fields | Description |
-| --------------- | ------ | ----------- |
-| Configuration Time | `zone_id`, `location_group_id`, `storage_type`, `location_level`, `temp_zone` | Static location attributes that don't change frequently |
-| Execution Time | `bin_status` | Dynamic attributes evaluated when the putaway request is processed |
+| Evaluation Time    | Fields                                                                        | Description                                                        |
+| ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Configuration Time | `zone_id`, `location_group_id`, `storage_type`, `location_level`, `temp_zone` | Static location attributes that don't change frequently            |
+| Execution Time     | `bin_status`, `single_merchant_only`                                          | Dynamic attributes evaluated when the putaway request is processed |
 
 ### 2.4 Iterative Cart Processing ("Follow the Leader")
 
@@ -97,16 +103,16 @@ Defines the "IF" condition. Users can combine multiple fields using **AND** logi
 
 Defines the target locations. Users can combine multiple fields using **AND** logic.
 
-| Field Name | Type | Operators | Action | Description |
-| ---------- | ---- | --------- | ------ | ----------- |
-| `zone_id` | List | `in` | Limit To / Exclude | Physical zoning. Example: "Target Zone A." |
-| `location_group_id` | List | `in` | Limit To / Exclude | Logical grouping across zones. Example: "Target Flammable Cabinet." |
-| `storage_type` | Enum | `=` | Limit To / Exclude | Physical equipment type. Values: `BIN`, `SHELF`, `RACK`, `FLOOR` |
-| `location_level` | Integer | `=`, `<=`, `>=`, `between` | Limit To / Exclude | Vertical position (1 = ground). Example: "Heavy items → Level <= 2." |
-| `bin_status` | Enum | `=` | Limit To | Current occupancy. Values: `EMPTY`, `PARTIAL`. Evaluated at execution time. |
-| `temp_zone` | Enum | `=` | Limit To / Exclude | Location temperature capability. Values: `AMBIENT`, `CHILLED`, `FROZEN` |
-| `single_merchant_only` | Boolean | `=` | Limit To | When TRUE, exclude bins containing other merchants' inventory. |
-| `aisle_id` | String | `=`, `in` | Limit To / Exclude | Aisle identifier for clustering and congestion management. |
+| Field Name             | Type    | Operators                  | Action             | Description                                                                 |
+| ---------------------- | ------- | -------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `zone_id`              | List    | `in`                       | Limit To / Exclude | Physical zoning. Example: "Target Zone A."                                  |
+| `location_group_id`    | List    | `in`                       | Limit To / Exclude | Logical grouping across zones. Example: "Target Flammable Cabinet."         |
+| `storage_type`         | Enum    | `=`                        | Limit To / Exclude | Physical equipment type. Values: `BIN`, `SHELF`, `RACK`, `FLOOR`            |
+| `location_level`       | Integer | `=`, `<=`, `>=`, `between` | Limit To / Exclude | Vertical position (1 = ground). Example: "Heavy items → Level <= 2."        |
+| `bin_status`           | Enum    | `=`                        | Limit To           | Current occupancy. Values: `EMPTY`, `PARTIAL`. Evaluated at execution time. |
+| `temp_zone`            | Enum    | `=`                        | Limit To / Exclude | Location temperature capability. Values: `AMBIENT`, `CHILLED`, `FROZEN`     |
+| `single_merchant_only` | Boolean | `=`                        | Limit To           | When TRUE, exclude bins containing other merchants' inventory.              |
+| `aisle_id`             | String  | `=`, `in`                  | Limit To / Exclude | Aisle identifier for clustering and congestion management.                  |
 
 **Notes**:
 - List fields (`zone_id`, `location_group_id`) use OR logic within the list (location in Zone-A OR Zone-B)
@@ -184,7 +190,11 @@ The system executes the Putaway Logic in the following sequence for every invent
    │   └─ Continue to next constraint
    │
    └─ Result: L contains only "Legal Candidates"
-      └─ If L is empty → FAIL (No valid locations)
+      └─ If L is empty:
+          ├─ LOG DEFECT (type: ZERO_LOCATIONS, failure_point: Phase 1, rule_trace)
+          ├─ PROMPT stower: "No valid locations. Select reason and scan location."
+          ├─ VALIDATE scanned location (not full, not locked)
+          └─ COMPLETE putaway with actual_location → TERMINATE
 
 3. EXECUTE PREFERENCES
    │
@@ -203,7 +213,7 @@ The system executes the Putaway Logic in the following sequence for every invent
    │   │       │   ├─ Last Put Location exists for this Cart+Stower?
    │   │       │   │   │
    │   │       │   │   ├─ YES: Is it in L and has capacity?
-   │   │       │   │   │   ├─ YES → Assign to Last Put Location → TERMINATE
+   │   │       │   │   │   ├─ YES → Assign to Last Put Location → GOTO STOWER SCAN
    │   │       │   │   │   └─ NO → Continue to standard check below
    │   │       │   │   │
    │   │       │   │   └─ NO: Continue to standard check below
@@ -215,146 +225,296 @@ The system executes the Putaway Logic in the following sequence for every invent
    │   │       │   ├─ Apply tie-breaker (location_id ASC)
    │   │       │   │
    │   │       │   ├─ L' has candidates?
-   │   │       │   │   ├─ YES → Assign top location → Update Last Put Location → TERMINATE
+   │   │       │   │   ├─ YES → Assign top location → Update Last Put Location → GOTO STOWER SCAN
    │   │       │   │   └─ NO → Fall through to next preference
    │   │       │
    │   └─ Continue to next preference
    │
-   └─ All preferences exhausted → FAIL (No matching preference)
+   └─ All preferences exhausted:
+       ├─ LOG DEFECT (type: ZERO_LOCATIONS, failure_point: Phase 2, rule_trace)
+       ├─ PROMPT stower: "No valid locations. Select reason and scan location."
+       ├─ VALIDATE scanned location (not full, not locked)
+       └─ COMPLETE putaway with actual_location → TERMINATE
 
-4. OUTPUT
+4. STOWER SCAN
    │
-   ├─ SUCCESS: Return assigned location
+   ├─ Display recommended_location to stower
+   ├─ Stower scans location
+   │
+   ├─ IF actual_location == recommended_location:
+   │   ├─ COMPLETE putaway → SUCCESS
    │   └─ Create soft reservation for Cart+Stower session
    │
-   └─ FAIL: Return error with reason
-       ├─ "No valid locations after constraints" (Phase 2 not reached)
-       └─ "No matching preference" (Phase 2 exhausted)
+   └─ IF actual_location != recommended_location:
+       ├─ PROMPT stower: "You scanned a different location. Why?"
+       ├─ Stower selects reason code
+       ├─ VALIDATE scanned location (not full, not locked)
+       ├─ LOG DEFECT (type: STOWER_OVERRIDE, recommended_location, actual_location, reason_code)
+       └─ COMPLETE putaway with actual_location → SUCCESS
 ```
 
 **Important Notes**:
-- Users should configure a catch-all preference (e.g., lowest priority, no product criteria, targets any empty bin) to avoid failures
+- Users should configure a catch-all preference (e.g., lowest priority, no product criteria, targets any empty bin) to minimize zero-location failures
 - Capacity check is not included in this version (see Out of Scope)
-- Audit trail of recommendation vs. actual putaway location is covered in the Stow PRD
+- System never blocks putaway work - stowers can always scan a location with reason code
 
-## 6. Rule Conflict Detection and Resolution
+## 6. Defect Logging and Observability
 
-### 6.1 Conflict Definition
+### 6.1 What is a Defect?
 
-A conflict exists when:
-1. One or more rules have location criteria with **zero location intersection**, AND
-2. At least one **active product** exists that matches the overlapping product criteria
+A defect is any putaway attempt where the rules engine did not successfully guide the stower to a location. Two types exist:
 
-**Key principle**: Conflicts are only surfaced when real, active products are affected. Theoretical conflicts (where no matching products exist) are not actionable and should not be shown to users.
+#### 6.1.1 Zero Valid Locations (Engine Failure)
 
-### 6.2 Conflict Types
+**Definition**: The putaway engine cannot recommend any location for a given product.
 
-#### 6.2.1 Self-Conflict
-A single rule with multiple location conditions (e.g., `zone_id`, `location_group_id`, `storage_type`) that result in zero location intersection.
+**Causes**:
+- **Phase 1 Failure**: Hard constraints eliminate all candidate locations (L becomes empty)
+- **Phase 2 Failure**: No preferences match the product, or all matching preferences have zero candidates
 
-**Example**: A rule specifies `zone_id IN [Zone-3]` AND `location_group_id IN [Hazmat-Cage]`, but no locations in Zone-3 belong to the Hazmat-Cage group.
+**Stower Experience**:
+- System displays: "No valid locations found. Please scan any available location."
+- Stower must:
+  1. Select a reason code (required dropdown)
+  2. Scan the chosen location
+  3. System validates basic safety (bin not full, not locked)
+  4. Putaway completes
 
-#### 6.2.2 Inter-Rule Conflict
-Multiple constraints with overlapping product criteria whose combined location filters result in zero location intersection.
+**Reason Codes** (predefined list):
+- Bin damaged/blocked
+- Congestion/traffic
+- Closer to staging area
+- Better ergonomics
+- Other (free text)
 
-**Example**:
-- Rule A: "Pact products → Limit to Zone 3"
-- Rule B: "Hazmat products → Limit to Hazmat Cage"
-- Conflict exists only if: (1) Zone 3 and Hazmat Cage have no overlapping locations, AND (2) Pact has active hazmat products
+#### 6.1.2 Stower Override (Guidance Ignored)
 
-**Note**: Preference rules cannot conflict with other preference rules because only one preference is selected per product (priority-based fall-through).
+**Definition**: The putaway engine recommended a location, but the stower scanned a different location.
 
-### 6.3 Detection Triggers
+**Stower Experience**:
+- System displays: "Recommended: BIN-A-01-05"
+- Stower scans different location (e.g., BIN-A-02-10)
+- System prompts: "You scanned a different location. Why?" (required dropdown)
+- Stower selects reason code (same list as above)
+- System validates basic safety
+- Putaway completes
 
-Conflict detection is **event-driven** (no polling). Re-evaluation is triggered by:
+### 6.2 Data Model
 
-| Trigger                                                  | Scope                                                |
-| -------------------------------------------------------- | ---------------------------------------------------- |
-| Rule save (create/update/delete)                         | Evaluate the saved rule against all other rules      |
-| Master data change (zones, location groups, locations)   | Re-evaluate all rules affected by changed data       |
-| Product catalog change (new products, attribute updates) | Re-evaluate rules matching affected product criteria |
+#### 6.2.1 Defect Record Schema
 
-### 6.4 Detection Algorithm
+Each defect record captures the following fields:
 
-Given the scale of product catalogs (100K-1M+ products, each with 1-3 pack types), conflict detection runs **asynchronously** in the background:
+| Field Name | Type | Description |
+| ---------- | ---- | ----------- |
+| `defect_id` | UUID | Unique identifier |
+| `timestamp` | Datetime | When the putaway attempt occurred |
+| `defect_type` | Enum | `ZERO_LOCATIONS` or `STOWER_OVERRIDE` |
+| `transaction_type` | Enum | `Inbound PO`, `Replenishment`, `Customer Return`, etc. |
+| `stower_id` | String | Associate performing the putaway |
+| `product_id` | String | SKU being put away |
+| `matched_constraints` | Array | List of constraint rule IDs that matched this product |
+| `matched_preference` | String | Preference rule ID that matched (null if Phase 2 failed) |
+| `valid_locations` | Array | Location IDs that passed all filters (empty if ZERO_LOCATIONS) |
+| `recommended_location` | String | Top location after Order By sorting (null if ZERO_LOCATIONS) |
+| `actual_location` | String | Location where stower actually put the item |
+| `override_reason_code` | Enum | Reason selected by stower (null if no override) |
+| `override_reason_text` | String | Free text if reason code = "Other" |
+| `rule_trace` | JSON | Execution details (which rules eliminated locations, which preferences were attempted) |
 
-1. **Trigger received** → Queue conflict detection job
-2. **Background process**:
-   - For self-conflicts: Compute location intersection of all conditions within the rule
-   - For inter-rule conflicts: Identify constraint pairs with overlapping product criteria, compute location intersection
-   - Query active products matching conflict criteria to determine real impact
-3. **Cache results** → Surface in UI when ready
-4. Users are **not blocked** waiting for detection to complete
+#### 6.2.2 Rule Trace Structure
 
-#### 6.4.1 Active Product Scope
-Conflicts are evaluated against **active products** only:
-- Products with current inventory
-- Products with expected inbound (open POs)
-
-Excluded:
-- Obsolete products
-- Products with no inventory and no inbound
-
-### 6.5 Conflict Reporting
-
-#### 6.5.1 Granularity
-
-| Conflict Type | Reported As |
-| ------------- | ----------- |
-| Self-conflict | Per rule |
-| Inter-rule conflict | Per rule pair |
-
-#### 6.5.2 Metrics
-Each conflict includes:
-- **Affected product count**: Number of active products impacted
-- **Affected product examples**: Sample SKUs for user reference
-
-Conflicts are **sorted by impact** (product count descending) to help users prioritize resolution.
-
-#### 6.5.3 Conflict Categorization
-Users can filter conflicts by:
-- **Production Impact**: Conflicts where all involved rules are currently enabled
-- **Potential Impact**: Conflicts involving one or more disabled rules
-
-### 6.6 Conflict Indicators
-
-- **Visual Feedback**: Conflicted rules display warning indicators in the rule management interface
-- **Conflict Count**: Shows number of conflicting rules and affected products
-- **Production Impact Badge**: Clearly indicates whether the conflict affects production (only when all conflicting rules are enabled)
-
-### 6.7 Rule State Management
-
-#### 6.7.1 Enable/Disable Logic
-- **Save Always Allowed**: Users can save rules regardless of conflict status
-- **Enable Always Allowed**: Users have full manual control to enable/disable any rule
-- **No Automatic Disabling**: System never automatically disables rules due to conflicts
-- **User Responsibility**: Users decide whether to enable conflicted rules based on system warnings
-
-#### 6.7.2 Rule States
-```
-ENABLED: Rule is active in putaway logic (user controlled)
-DISABLED: Rule is inactive in putaway logic (user controlled)
+**For Zero-Location Defects (Phase 1 Failure):**
+```json
+{
+  "phase1_result": {
+    "initial_location_count": 500,
+    "constraints_applied": [
+      {
+        "rule_id": "CONS-001",
+        "rule_name": "Merchant Zones",
+        "action": "Limit To",
+        "locations_after": 120
+      },
+      {
+        "rule_id": "CONS-005",
+        "rule_name": "Heavy Item Safety",
+        "action": "Limit To",
+        "locations_after": 0
+      }
+    ],
+    "final_location_count": 0,
+    "failure_point": "Phase 1"
+  },
+  "phase2_result": null
+}
 ```
 
-**Note**: Conflict status is tracked separately and does not affect rule enable/disable capability.
+**For Zero-Location Defects (Phase 2 Failure):**
+```json
+{
+  "phase1_result": {
+    "initial_location_count": 500,
+    "final_location_count": 200
+  },
+  "phase2_result": {
+    "preferences_attempted": [
+      {
+        "priority": 1,
+        "rule_id": "PREF-003",
+        "rule_name": "FEFO Placement",
+        "matched": false,
+        "reason": "Product not lot-controlled"
+      },
+      {
+        "priority": 2,
+        "rule_id": "PREF-004",
+        "rule_name": "SKU Consolidation",
+        "matched": true,
+        "candidates_found": 0,
+        "reason": "No locations match location criteria"
+      }
+    ],
+    "failure_point": "Phase 2"
+  }
+}
+```
 
-### 6.8 Resolution Interface
+#### 6.2.3 Data Retention
 
-#### 6.8.1 Warning System
-- **Enable Warnings**: When user enables a rule that conflicts with other enabled rules, display warning with impact preview
-- **Impact Preview**: Show affected product count and examples
-- **User Choice**: Allow user to proceed with full awareness of impact
+- **Retention Period**: Rolling 90-day window
+- **Automatic Cleanup**: Defects older than 90 days are archived and purged from active database
+- **Archive Strategy**: (Out of scope for V1 - no long-term storage)
 
-#### 6.8.2 Resolution Tools
-The system provides **information and tools** to help users resolve conflicts, but does not prescribe specific solutions (resolution requires business context the system cannot infer):
+### 6.3 Defect UI
 
-| Tool | Purpose |
-| ---- | ------- |
-| Conflict explanation | Clear description of why the conflict exists (which rules, which criteria) |
-| Side-by-side rule view | Compare conflicting rules with criteria highlighted |
-| Affected products list | View products impacted by the conflict |
-| Location browser | View locations in each zone/group to understand the gap |
-| Edit shortcuts | Quick links to edit Rule A, Rule B |
+#### 6.3.1 Access Control
+
+**Who Can View**: Operations Managers and WMS SMEs (anyone with rule configuration or operational oversight permissions)
+
+**No Role-Based Filtering**: All users see the same defect list (no tiered access)
+
+#### 6.3.2 Defect List View
+
+**Layout**: Simple table displaying individual defect records (no aggregation or grouping)
+
+**Columns**:
+- Timestamp
+- Defect Type (badge: "Zero Locations" or "Override")
+- Product ID / SKU
+- Transaction Type
+- Stower
+- Recommended Location (blank if Zero Locations)
+- Actual Location
+- Override Reason
+
+**Sorting**: Default sort by timestamp descending (newest first)
+
+**Filtering**:
+- Date range picker (default: last 7 days)
+- Defect type filter (Zero Locations / Override / All)
+- Transaction type filter
+- Product search (SKU or product attributes)
+- Stower search
+
+**Pagination**: 50 records per page
+
+#### 6.3.3 Defect Detail View
+
+Clicking a row opens a detail panel showing:
+
+**Product Context**:
+- Full product attributes (merchant, pack type, ABC code, weight, hazmat, temp zone, etc.)
+
+**Rule Execution Trace** (for Zero-Location defects):
+- Phase 1: Which constraints matched, how many locations remained after each
+- Phase 2: Which preferences were attempted, why they failed
+- Visual representation (e.g., "500 locations → 120 → 0")
+
+**Location Context**:
+- Recommended location (if applicable): Zone, storage type, level, current status
+- Actual location: Same details
+- Valid locations list: All candidate locations that passed filters (expandable list)
+
+**Override Context** (for Override defects):
+- Reason code selected by stower
+- Free text (if "Other" was selected)
+
+**Actions**: None (view-only)
+
+#### 6.3.4 Real-Time Dashboard (Operations)
+
+**Purpose**: Live monitoring of putaway performance
+
+**Metrics**:
+- Defect count today (current shift)
+- Defect rate: (defects / total putaways) %
+- Breakdown by type: Zero Locations vs. Override
+- Top 5 products by defect count today
+
+**Chart**: Defect trend over last 24 hours (hourly buckets)
+
+**Live Feed**: Last 10 defects with one-line summary
+
+#### 6.3.5 Historical Reports (SMEs)
+
+**Purpose**: Trend analysis for rule tuning
+
+**Pre-built Reports**:
+1. **Defect Summary by Day**: Daily defect counts and rates over selected period
+2. **Top Defect Products**: Products with highest defect counts
+3. **Top Override Reasons**: Frequency distribution of reason codes
+4. **Rule Performance**: Which rules appear most often in Zero-Location traces
+
+**Export**: CSV download for offline analysis
+
+### 6.4 Stower UI Changes
+
+**Current State**: System shows recommended location, stower scans location
+
+**New State**:
+- If recommendation exists: Show recommended location + allow different scan with reason code prompt
+- If no recommendation: Show "No valid locations" message, require reason code before scan
+
+**Mobile UX** (Handheld Device):
+```
+┌─────────────────────────────┐
+│ Putaway Task                │
+│ SKU: ABC-123                │
+│ Qty: 1 Unit                 │
+│                             │
+│ Recommended Location:       │
+│ ┏━━━━━━━━━━━━━━━━━━━━━━━┓   │
+│ ┃   BIN-A-01-05         ┃   │
+│ ┗━━━━━━━━━━━━━━━━━━━━━━━┛   │
+│                             │
+│ Scan Location: [________]   │
+│                             │
+│ [Confirm]                   │
+└─────────────────────────────┘
+```
+
+If scanned location ≠ recommended:
+```
+┌─────────────────────────────┐
+│ Override Confirmation       │
+│                             │
+│ Recommended: BIN-A-01-05    │
+│ You scanned: BIN-B-03-12    │
+│                             │
+│ Why are you using a         │
+│ different location?         │
+│                             │
+│ [ Select Reason ▼ ]         │
+│   - Bin damaged/blocked     │
+│   - Congestion/traffic      │
+│   - Closer to staging       │
+│   - Better ergonomics       │
+│   - Other                   │
+│                             │
+│ [Cancel]  [Confirm Override]│
+└─────────────────────────────┘
+```
 
 ## 7. Out of Scope
 
@@ -363,31 +523,35 @@ The system provides **information and tools** to help users resolve conflicts, b
 - **Volumetric calculations**: L×W×H based bin fitting
 - **Weight capacity validation**: Checking location weight limits
 
-### 7.2 Bulk Operations
-- **Mass Conflict Resolution**: Tools to resolve multiple related conflicts simultaneously
-- **Rule Prioritization**: Batch assignment of priority levels across rule sets
-- **Emergency Override**: Temporary conflict bypass for urgent operational needs
+### 7.2 Advanced Analytics
+- **Aggregated defect patterns**: e.g., "47 overrides for SKU-123 in Zone-A"
+- **Machine learning**: Predict rule failures or suggest rule changes
+- **Automated rule suggestions**: System-generated recommendations based on defect patterns
 
-### 7.3 Audit and Reporting
-- **Conflict History**: Track when conflicts occurred and how they were resolved
-- **Rule Performance**: Monitor which rules are frequently disabled due to conflicts
-- **Resolution Analytics**: Identify common conflict patterns for UX improvement
+### 7.3 Defect Management Actions
+- **Acknowledge/dismiss defects**: Mark defects as reviewed
+- **Assign defects**: Assign to specific engineers for resolution
+- **Link to tickets**: Connect defects to rule change tickets
 
-### 7.4 Resolution Guidance
-- Automated suggestions for specific ways to resolve each conflict
-- Prescriptive recommendations on which rule to modify
+### 7.4 Long-Term Data Retention
+- **Archive beyond 90 days**: Long-term storage of defect data
+- **Historical trend analysis**: Beyond 90-day retention window
 
-### 7.5 Version Control
-- Rule versioning and change history
-- Rollback to previous rule configurations
-- Staged deployment (draft → production)
+### 7.5 Automated Alerting
+- **Slack/email notifications**: When defect rate spikes
+- **Threshold-based alerts**: For specific products or zones
 
-### 7.6 Advanced Conflict Detection (Future Iteration)
-- **Precise "active product" definition**: Refining criteria for which products are included in conflict evaluation
-- **Velocity-based prioritization**: Ranking conflicts by product movement volume, not just count
-- **Predictive conflicts**: Detecting conflicts for products not yet in catalog (e.g., based on merchant onboarding)
+### 7.6 Defect Resolution Workflow
+- **Guided flow**: From defect to rule editing
+- **A/B testing**: Test rule changes before full deployment
+- **Impact simulation**: Preview rule changes before deployment
 
-### 7.7 Advanced Product Criteria
+### 7.7 Version Control
+- **Rule versioning**: Change history
+- **Rollback capability**: Revert to previous rule configurations
+- **Staged deployment**: Draft → production promotion
+
+### 7.8 Advanced Product Criteria
 - **Dimension-based rules**: L×W×H comparisons for precise bin fitting
 - **Product category/type**: Broad classification rules
 - **True best-fit algorithm**: (bin capacity - item size) optimization
@@ -431,6 +595,26 @@ Capacity validation (volumetric fit, weight limits) is deferred to a future phas
 **Q9: What happens if a product's ABC code changes?**
 
 ABC codes are typically recalculated periodically based on velocity data. When a product's ABC code changes, only new putaway is affected—existing inventory in the warehouse doesn't automatically move. This is expected behavior; relocating existing inventory would be handled by a separate slotting optimization process.
+
+**Q10: Why not detect conflicts proactively at configuration time?**
+
+Proactive conflict detection is technically complex (requires evaluating all active products against all rule combinations) and creates UX challenges (how do users resolve abstract conflicts before seeing real-world impact?). The defect logging approach shifts complexity from prediction to observation. SMEs tune rules based on actual operational failures, not theoretical scenarios.
+
+**Q11: Won't allowing stowers to override create chaos?**
+
+No. The system still validates basic safety (bin not full, not locked). Overrides with reason codes provide valuable feedback about why recommendations don't work in practice. If override rates are high, it signals that rules need tuning, not that stowers are making bad decisions.
+
+**Q12: How do SMEs know which rules to fix when they see defects?**
+
+The rule trace in each defect record shows exactly which constraints eliminated locations or which preferences failed to find candidates. SMEs can see patterns (e.g., "Constraint XYZ appears in 80% of Zero-Location defects") and prioritize tuning high-impact rules.
+
+**Q13: What if the defect list gets overwhelmed with thousands of records?**
+
+Filtering by date range, product, and defect type keeps the list manageable. The real-time dashboard highlights current issues. For deeper analysis, SMEs can export to CSV. If volume becomes unmanageable, it indicates systemic rule problems that need immediate attention.
+
+**Q14: Why 90-day retention instead of keeping all historical data?**
+
+Defect data is high-volume and primarily used for recent trend analysis. Keeping 90 days balances operational needs (see seasonal patterns, compare week-over-week) with database costs. Long-term archival can be added later if business need emerges.
 
 ## Appendix A: Configuration Library (Business Requirements Map)
 

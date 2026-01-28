@@ -6,3 +6,6 @@ Volumetrics will be used to find the closest candidate location that fits all it
 
 Can stowers override Constraints? 
 How to make sure the remaining units prioritize the last stow location (vs the recommended locations per the putaway rules)? 
+
+**How to handle subsequent placement?** 
+
