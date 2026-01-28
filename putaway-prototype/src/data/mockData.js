@@ -1,3 +1,17 @@
+/**
+ * Calculate Euclidean distance between two locations
+ * Uses x, y coordinates from location objects
+ * @returns {number} Distance in meters (mock scale: 1 unit = 1 meter)
+ */
+export function calculateDistance(locA, locB) {
+  if (!locA || !locB) return Infinity;
+
+  const dx = (locA.x_coord || 0) - (locB.x_coord || 0);
+  const dy = (locA.y_coord || 0) - (locB.y_coord || 0);
+
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 // Mock Zones
 export const MOCK_ZONES = [
   { id: 'Zone_A_Golden', name: 'Zone A - Golden (Fast Movers)' },
@@ -23,18 +37,22 @@ function generateLocations() {
 
   // Zone A - Golden (10 bins)
   for (let i = 0; i < 10; i++) {
+    const aisleNum = Math.floor(i / 2) + 1;
+    const level = (i % 3) + 1;
     locations.push({
       id: `BIN-${String(id).padStart(3, '0')}`,
       zone_id: 'Zone_A_Golden',
       location_group_id: i < 5 ? ['pick_faces'] : [],
       storage_type: 'SHELF',
-      location_level: (i % 3) + 1,
+      location_level: level,
       bin_status: i % 3 === 0 ? 'EMPTY' : 'PARTIAL',
       temp_zone: 'AMBIENT',
-      aisle_id: `A${Math.floor(i / 2) + 1}`,
+      aisle_id: `A${aisleNum}`,
       distance_shipping: 10 + i * 2,
       bin_capacity: 1.0,
       utilization_percent: i % 3 === 0 ? 0 : 40 + (i * 5),
+      x_coord: 0 + (aisleNum * 10),
+      y_coord: (aisleNum * 10) + level,
       current_contents: i % 3 !== 0 ? [
         {
           merchant_id: i % 2 === 0 ? 'Nike' : 'Pact',
@@ -49,18 +67,22 @@ function generateLocations() {
 
   // Zone B - Standard (20 bins)
   for (let i = 0; i < 20; i++) {
+    const aisleNum = Math.floor(i / 4) + 1;
+    const level = (i % 4) + 1;
     locations.push({
       id: `BIN-${String(id).padStart(3, '0')}`,
       zone_id: 'Zone_B_Standard',
       location_group_id: [],
       storage_type: i < 10 ? 'SHELF' : 'RACK',
-      location_level: (i % 4) + 1,
+      location_level: level,
       bin_status: i % 4 === 0 ? 'EMPTY' : 'PARTIAL',
       temp_zone: 'AMBIENT',
-      aisle_id: `B${Math.floor(i / 4) + 1}`,
+      aisle_id: `B${aisleNum}`,
       distance_shipping: 30 + i * 3,
       bin_capacity: 1.5,
       utilization_percent: i % 4 === 0 ? 0 : 30 + (i * 3),
+      x_coord: 100 + (aisleNum * 10),
+      y_coord: (aisleNum * 10) + level,
       current_contents: i % 4 !== 0 ? [
         {
           merchant_id: i % 3 === 0 ? 'Zara' : 'Nike',
@@ -75,18 +97,22 @@ function generateLocations() {
 
   // Zone C - Reserve (15 bins)
   for (let i = 0; i < 15; i++) {
+    const aisleNum = Math.floor(i / 5) + 1;
+    const level = (i % 5) + 1;
     locations.push({
       id: `BIN-${String(id).padStart(3, '0')}`,
       zone_id: 'Zone_C_Reserve',
       location_group_id: i < 5 ? ['bulk_storage'] : [],
       storage_type: 'RACK',
-      location_level: (i % 5) + 1,
+      location_level: level,
       bin_status: i % 5 === 0 ? 'EMPTY' : 'PARTIAL',
       temp_zone: 'AMBIENT',
-      aisle_id: `C${Math.floor(i / 5) + 1}`,
+      aisle_id: `C${aisleNum}`,
       distance_shipping: 80 + i * 4,
       bin_capacity: 3.0,
       utilization_percent: i % 5 === 0 ? 0 : 50 + (i * 2),
+      x_coord: 200 + (aisleNum * 10),
+      y_coord: (aisleNum * 10) + level,
       current_contents: i % 5 !== 0 ? [
         {
           merchant_id: 'Pact',
@@ -113,6 +139,8 @@ function generateLocations() {
       distance_shipping: 120,
       bin_capacity: 0.5,
       utilization_percent: i === 0 ? 0 : 60,
+      x_coord: 300 + (i * 5),
+      y_coord: 10 + i,
       current_contents: i === 0 ? [] : [
         {
           merchant_id: 'ChemCorp',
@@ -139,6 +167,8 @@ function generateLocations() {
       distance_shipping: 150,
       bin_capacity: 10.0,
       utilization_percent: 0,
+      x_coord: 320 + (i * 10),
+      y_coord: 20 + i,
       current_contents: []
     });
     id++;
