@@ -213,5 +213,30 @@ export const TEST_SCENARIOS = [
     transactionType: 'Inbound PO',
     cartContext: { cartId: null, lastPutLocation: null },
     expectedBehavior: 'Hazmat Isolation should apply to any hazmat_class != NONE'
+  },
+  {
+    id: 'scenario-11',
+    name: 'Cart Processing: Proximity Optimization',
+    description: 'Second item in cart should prioritize locations near last putaway to minimize travel',
+    product: {
+      sku_id: 'TEST-FAST-002',
+      merchant_id: 'Nike',
+      pack_type: 'UNIT',
+      weight: 6,
+      abc_code: 'A',
+      is_oversized: false,
+      hazmat_class: 'NONE',
+      temp_zone: 'AMBIENT',
+      inventory_status: 'GOOD',
+      is_lot_controlled: false,
+      lot_id: null
+    },
+    transactionType: 'Inbound PO',
+    cartContext: {
+      cartId: 'CART-002',
+      lastPutLocation: 'BIN-001',
+      lastPutCoordinates: { x: 10, y: 20, z: 1 }
+    },
+    expectedBehavior: 'With proximity-based sorting, should select location closest to BIN-001 (x:10, y:20, z:1) to minimize stower travel distance. Fall-through behavior: if proximity sort fails to find candidates, engine cascades to next enabled preference.'
   }
 ];
