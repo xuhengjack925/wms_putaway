@@ -68,6 +68,8 @@ When a preference has `cartConsolidation: TRUE`:
    - If Last Put Location exists AND passes all hard constraints AND has capacity → Select it
    - Otherwise → Fall back to normal locationCriteria + orderBy logic within the same preference
 
+**Note**: To optimize travel distance for subsequent items, configure "Proximity to Last Location" as an orderBy field (primary or secondary). This will sort candidate locations by distance from the Last Put Location when available.
+
 #### 2.4.3 Concurrency
 
 Cart consolidation applies to a single stower's session. Multiple stowers working from the same cart ID operate independently with their own Last Put Location tracking.
