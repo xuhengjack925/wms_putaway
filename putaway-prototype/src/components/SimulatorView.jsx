@@ -4,7 +4,8 @@ import ScenarioBuilder from './ScenarioBuilder';
 import ExecutionTrace from './ExecutionTrace';
 import ResultCard from './ResultCard';
 import { useRules } from '../context/RulesContext';
-import { executePutaway } from '../utils/executionEngine';
+import { executePutaway, simulateStowerOverride } from '../utils/executionEngine';
+import { OverrideReasonCodes } from '../utils/defectLogger';
 import { MOCK_LOCATIONS, TEST_PRODUCTS } from '../data/mockData';
 
 export default function SimulatorView() {
@@ -14,6 +15,9 @@ export default function SimulatorView() {
   const [cartContext, setCartContext] = useState({ cartId: null, lastPutLocation: null });
   const [executionResult, setExecutionResult] = useState(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [overrideLocation, setOverrideLocation] = useState('');
+  const [overrideReason, setOverrideReason] = useState('BIN_DAMAGED');
+  const [overrideText, setOverrideText] = useState('');
 
   const handleExecute = () => {
     if (!selectedProduct) return;
@@ -49,6 +53,30 @@ export default function SimulatorView() {
     setTransactionType('Inbound PO');
     setCartContext({ cartId: null, lastPutLocation: null });
     setExecutionResult(null);
+    setOverrideLocation('');
+    setOverrideReason('BIN_DAMAGED');
+    setOverrideText('');
+  };
+
+  const handleLogOverride = () => {
+    if (!overrideLocation || !executionResult?.success) return;
+
+    const defect = simulateStowerOverride(
+      executionResult,
+      selectedProduct,
+      transactionType,
+      overrideLocation,
+      overrideReason,
+      overrideText
+    );
+
+    if (defect) {
+      alert(`Override logged successfully!\nDefect ID: ${defect.defect_id}`);
+      setOverrideLocation('');
+      setOverrideText('');
+    } else {
+      alert('No override detected - location matches recommendation');
+    }
   };
 
   return (
@@ -88,7 +116,69 @@ export default function SimulatorView() {
 
         {/* Result Card */}
         {executionResult && (
-          <ResultCard result={executionResult} />
+          <>
+            <ResultCard result={executionResult} />
+
+            {/* Override Simulation (only for successful putaways) */}
+            {executionResult.success && (
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4">Simulate Stower Override</h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Actual Location Used
+                    </label>
+                    <input
+                      type="text"
+                      value={overrideLocation}
+                      onChange={(e) => setOverrideLocation(e.target.value)}
+                      placeholder="e.g., LOC-A-015"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Override Reason
+                    </label>
+                    <select
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {OverrideReasonCodes.map(reason => (
+                        <option key={reason.code} value={reason.code}>
+                          {reason.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Additional Notes (Optional)
+                    </label>
+                    <textarea
+                      value={overrideText}
+                      onChange={(e) => setOverrideText(e.target.value)}
+                      placeholder="Provide additional context..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleLogOverride}
+                    disabled={!overrideLocation}
+                    className="w-full py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed font-medium transition-colors"
+                  >
+                    Log Override
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
