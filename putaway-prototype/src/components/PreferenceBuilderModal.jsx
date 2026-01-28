@@ -1,5 +1,5 @@
 import { X, Save, Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TransactionScopeSelector from './TransactionScopeSelector';
 import CriteriaBuilder from './CriteriaBuilder';
 import OrderBySelector from './OrderBySelector';
@@ -7,23 +7,42 @@ import RulePreview from './RulePreview';
 import { PRODUCT_CRITERIA_FIELDS, LOCATION_CRITERIA_FIELDS } from '../types';
 
 export default function PreferenceBuilderModal({ isOpen, onClose, rule, onSave }) {
-  const [formData, setFormData] = useState(
-    rule || {
-      name: '',
-      scope: ['Any'],
-      productCriteria: [],
-      locationCriteria: [],
-      cartConsolidation: false,
-      orderBy: {
-        primary: null,
-        secondary: null
-      },
-      enabled: true
-    }
-  );
+  const [formData, setFormData] = useState({
+    name: '',
+    scope: ['Any'],
+    productCriteria: [],
+    locationCriteria: [],
+    cartConsolidation: false,
+    orderBy: {
+      primary: null,
+      secondary: null
+    },
+    enabled: true
+  });
 
   const [errors, setErrors] = useState({});
   const [showPreview, setShowPreview] = useState(true);
+
+  // Update form data when rule prop changes
+  useEffect(() => {
+    if (rule) {
+      setFormData(rule);
+    } else {
+      setFormData({
+        name: '',
+        scope: ['Any'],
+        productCriteria: [],
+        locationCriteria: [],
+        cartConsolidation: false,
+        orderBy: {
+          primary: null,
+          secondary: null
+        },
+        enabled: true
+      });
+    }
+    setErrors({});
+  }, [rule, isOpen]);
 
   if (!isOpen) return null;
 
@@ -151,31 +170,10 @@ export default function PreferenceBuilderModal({ isOpen, onClose, rule, onSave }
             color="emerald"
           />
 
-          {/* Cart Consolidation */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.cartConsolidation}
-                onChange={e => handleFieldChange('cartConsolidation', e.target.checked)}
-                className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="flex-1">
-                <span className="font-semibold text-blue-900">
-                  Enable Cart Consolidation (Follow the Leader)
-                </span>
-                <p className="text-xs text-blue-700 mt-1">
-                  First item uses normal logic. Subsequent items from same cart try Last Put Location first, then fall back to normal logic.
-                </p>
-              </div>
-            </label>
-          </div>
-
           {/* Order By */}
           <OrderBySelector
             orderBy={formData.orderBy}
             onChange={value => handleFieldChange('orderBy', value)}
-            disabled={formData.cartConsolidation}
           />
 
           {/* Rule Preview */}

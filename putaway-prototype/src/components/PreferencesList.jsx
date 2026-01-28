@@ -183,11 +183,6 @@ export default function PreferencesList() {
                   >
                     {preference.enabled ? 'Enabled' : 'Disabled'}
                   </button>
-                  {preference.cartConsolidation && (
-                    <span className="bg-blue-100 px-2 py-0.5 rounded text-blue-700 font-medium">
-                      Follow the Leader
-                    </span>
-                  )}
                 </div>
               </div>
             </div>

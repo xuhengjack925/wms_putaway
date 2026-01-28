@@ -83,10 +83,7 @@ export default function ResultCard({ result }) {
                 {winningPreference.name}
               </div>
               <div className="text-xs text-slate-500">
-                {winningPreference.cartConsolidation && (
-                  <span className="text-blue-600 font-medium">Follow the Leader enabled</span>
-                )}
-                {winningPreference.orderBy?.primary && !winningPreference.cartConsolidation && (
+                {winningPreference.orderBy?.primary && (
                   <span>Sorted by {winningPreference.orderBy.primary.field}</span>
                 )}
               </div>
