@@ -157,6 +157,7 @@ Applicable to Preferences only. Strategies are **soft preferences**—they sort 
 | **Fill Least Full (Spread)**   | Sort by Utilization % ASC.                                                                             | Avoid congestion           |
 | **Closest to Shipping Dock**   | Sort by dock proximity score ASC (lower = closer).                                                     | Fast mover optimization    |
 | **Cluster by Merchant**        | Sort by count of same-merchant items in the aisle DESC. Requires `aisle_id` on locations.              | Organic merchant zones     |
+| **Proximity to Last Location** | Sort by distance(location, last_put_location) ASC. Only applies when Last Put Location exists (not first item in cart). | Travel optimization        |
 | **Fill Bottom Levels First**   | Sort by Location Level ASC.                                                                            | Ergonomics / Safety        |
 | **Smallest Bin First**         | Sort by Bin Capacity ASC.                                                                              | Space optimization         |
 
@@ -167,6 +168,7 @@ Applicable to Preferences only. Strategies are **soft preferences**—they sort 
 **Notes**:
 - "Prioritize Same Lot/Expiry" and "Prioritize Same SKU" are soft preferences—bins without matching lot/SKU are sorted lower, not excluded
 - "Cluster by Merchant" calculates a density score based on neighboring bins in the same aisle; for new merchants with no existing inventory, this has no effect
+- "Proximity to Last Location" requires cart context with Last Put Location; when unavailable (first item in cart), this orderBy is skipped
 - "Closest to Shipping Dock" uses a `dock_proximity_score` configured per location (1 = nearest)
 
 ## 5. Logical Flow
