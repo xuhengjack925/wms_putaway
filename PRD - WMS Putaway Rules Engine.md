@@ -620,6 +620,16 @@ Filtering by date range, product, and defect type keeps the list manageable. The
 
 Defect data is high-volume and primarily used for recent trend analysis. Keeping 90 days balances operational needs (see seasonal patterns, compare week-over-week) with database costs. Long-term archival can be added later if business need emerges.
 
+**Q15: Why is "Proximity to Last Location" an orderBy (tie-breaker) instead of a Preference with priority?**
+
+**The Trade-off**: Should travel distance override business rules like zone optimization, utilization, or FEFO compliance?
+
+**Option A - Proximity as Preference Priority**: If Priority 1 is "Minimize Travel," the engine selects ANY nearby location and never evaluates lower priorities (zone placement, utilization). Result: Fast movers go to Reserve Zone, high-value items scattered randomly—business strategy undermined.
+
+**Option B - Proximity as OrderBy (Chosen)**: Preferences enforce business rules (e.g., Priority 1: Fill Golden Zone), then orderBy optimizes within those rules (e.g., 1st: Utilization DESC, 2nd: Proximity ASC). When multiple Golden Zone bins have similar utilization (~90%), proximity breaks the tie.
+
+**Rationale**: Travel distance is an **optimization within constraints**, not a constraint itself. Strategic placement (zones, FEFO, utilization) wins first, then proximity refines the choice among equally good options. This balances warehouse strategy with operational efficiency. Users can still make proximity dominant by placing it as the 1st orderBy if their operation prioritizes speed over strategic placement.
+
 ## Appendix A: Configuration Library (Business Requirements Map)
 
 This section maps specific business requirements into the PRD format.
