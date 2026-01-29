@@ -52,12 +52,11 @@ For Inbound Carts containing multiple items, the engine runs **iteratively** (on
 
 #### 2.4.1 Key Definitions
 
-| Term | Definition |
-| ---- | ---------- |
-| Cart ID | Virtual cart identifier that groups items being put away together |
-| Stower | The associate performing the putaway operation |
-| Soft Reservation | Temporary hold on bin capacity after assignment, valid for the duration of the stower's session |
-| Last Put Location | The bin where the previous item from the same cart was assigned |
+| Term              | Definition                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| Cart ID           | Virtual cart identifier that groups items being put away together                               |
+| Stower            | The associate performing the putaway operation                                                  |
+| Last Put Location | The bin where the previous item from the same cart was assigned                                 |
 
 #### 2.4.2 Cart Consolidation Behavior
 
@@ -73,12 +72,6 @@ When a preference has `cartConsolidation: TRUE`:
 #### 2.4.3 Concurrency
 
 Cart consolidation applies to a single stower's session. Multiple stowers working from the same cart ID operate independently with their own Last Put Location tracking.
-
-#### 2.4.4 Soft Reservation Lifecycle
-
-- **Created**: When a location is assigned to a putaway task
-- **Released**: When the putaway is completed, cancelled, or the stower session times out
-- **Visibility**: Soft reservations reduce available capacity for subsequent putaway recommendations
 
 ## 3. Master Data Dictionary
 
