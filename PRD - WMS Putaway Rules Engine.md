@@ -625,107 +625,33 @@ Defect data is high-volume and primarily used for recent trend analysis. Keeping
 
 **Q16: What happens when a cart has partial fills (e.g., 12 of 20 items fit in first location)? Won't the engine continue using "Fill Most Full" for remaining items instead of optimizing for proximity?**
 
-**Short answer**: Correct—this is expected behavior that prioritizes business rules over convenience.
+Yes, this is expected behavior that prioritizes business rules over operational convenience. Consider a scenario where items 1-12 fill BIN-A-001, and items 13-20 require new placement. When the engine processes item #13 with `lastPutLocation = BIN-A-001`, the configured preference determines behavior. If the preference is "Fill Most Full" with no proximity in the orderBy stack, the engine ranks all valid candidates by utilization percentage descending. If BIN-B-045 (50 meters away) has 95% utilization while BIN-A-002 (adjacent) has 60% utilization, the engine selects BIN-B-045. The stower walks across the warehouse, contradicting the intuition that cart-based work should cluster spatially.
 
-**The scenario**: Items 1-12 fill BIN-A-001. Items 13-20 need placement. The engine re-runs for item #13 with `lastPutLocation = BIN-A-001`. If the preference is "Fill Most Full," the engine looks for the highest-utilization bin among valid candidates. If BIN-B-045 (far away) has 95% utilization and BIN-A-002 (adjacent) has 60%, BIN-B-045 wins—unless proximity is in the orderBy stack.
-
-**Why this is correct**: The preference (Fill Most Full) encodes the PRIMARY business objective (space efficiency). Proximity is a SECONDARY optimization via orderBy. If travel efficiency is critical for partial-fill scenarios, configure the rule accordingly:
-
-```
-Preference Priority 1: Cart-based Putaway
-- Product Criteria: (All)
-- Location Criteria: (All Valid)
-- OrderBy: [Proximity to Last Location, Fill Most Full]
-- Cart Consolidation: TRUE
-```
-
-This places proximity FIRST in the orderBy stack, making it the primary sort within valid locations. The system is explicit, not implicit—users configure intent.
-
-**Alternative workflows**: For operations requiring explicit "finish this bin first" logic, use cart consolidation with "Prioritize Same SKU" to attempt sticky-bin behavior before falling back to proximity-optimized alternatives.
+This behavior is correct by design because the preference encodes the primary business objective—space efficiency. Proximity is deliberately a secondary optimization controlled via orderBy configuration. If travel efficiency is critical for partial-fill scenarios, configure the preference to place proximity first: `OrderBy: [Proximity to Last Location, Fill Most Full]`. This makes proximity the primary sort criterion, selecting BIN-A-002 (adjacent, 60% full) over BIN-B-045 (distant, 95% full) when both are valid. The system is explicit, not implicit: users encode operational intent through configuration choices. For operations requiring "finish this bin first" logic, cart consolidation with "Prioritize Same SKU" attempts sticky-bin behavior before proximity-optimized fallbacks, though true bin-filling workflows may require scanning logic changes outside the engine's scope.
 
 **Q17: How does the system detect missing merchant configuration? Without explicit rules, inventory disperses across zones with no warning until defects appear.**
 
-**Short answer**: Detection is reactive via defect logging, not proactive. This is intentional.
+Detection is reactive through defect logging, not proactive validation, and this is an intentional design choice. Consider a scenario where Merchant X onboards with 500 SKUs. No merchant-specific constraints exist in the engine. Generic preferences apply—ABC-A products flow to the Golden Zone, ABC-C products to Reserve—based purely on velocity classification. Items scatter across zones following ABC logic without merchant clustering. The warehouse operates for two weeks before an operations manager notices Merchant X inventory is dispersed across 12 aisles, complicating replenishment and pick-path efficiency. The issue surfaces through operational observation or defect review, not system alerts.
 
-**The scenario**: A new merchant onboards. No merchant-specific constraints exist. Generic preferences (e.g., "ABC-A → Golden Zone") apply. Items scatter based on ABC codes without merchant clustering. SMEs discover the issue later through defect review or operational feedback.
+This reactive approach is chosen because proactive detection requires the system to know which merchants "should" have dedicated rules—an unknowable intent. Not all merchants require dedicated zones; many share generic space by design. For example, small DTC brands might intentionally use shared Golden Zone space for their fast movers, while a large B2B client requires isolated zones for contractual or operational reasons. The system cannot infer this distinction from merchant master data alone. Instead, defect patterns reveal intent gaps organically. If Merchant X inventory triggers 50 stower overrides in week one with reason code "BETTER_ORGANIZATION," the defect log surfaces a clear pattern. SMEs review the trace, recognize missing merchant clustering rules, and create a constraint: `merchant_id = 'Merchant_X' → zone_id IN ['Zone_5']`. Future putaways follow the new rule immediately.
 
-**Why reactive detection is preferred**:
-
-1. **Proactive detection requires perfect foresight**: The system cannot know which merchants "should" have rules. Not all merchants need dedicated zones—some share generic space by design.
-
-2. **Defect patterns reveal intent gaps**: If a merchant's inventory triggers high override rates (stowers manually cluster items despite engine recommendations), the defect log surfaces the pattern. SMEs see "Merchant X has 50 overrides this week with reason BETTER_ORGANIZATION" and create a rule.
-
-3. **Configuration governance is a process problem, not a system problem**: Merchant onboarding checklists should include "Create putaway rules if dedicated zone exists." Automation cannot substitute for operational discipline.
-
-**Mitigation strategies**:
-
-- **Onboarding checklist**: Require SMEs to configure constraints for new merchants before first receipt
-- **Defect monitoring**: Set alerts for new `merchant_id` values appearing in override logs
-- **Template rules**: Maintain rule templates for common merchant patterns (e.g., "New DTC merchant → Zone X, Fill Least Full")
-
-**Out of scope for Phase 1**: Proactive "missing rule" detection based on merchant master data. This could be added in future phases if operational need is validated.
+Configuration governance is fundamentally a process problem, not a system automation problem. Merchant onboarding checklists should mandate rule configuration before first receipt if dedicated zones exist. Defect monitoring can alert when new merchant_id values appear in override logs, signaling potential configuration gaps. Rule templates for common merchant patterns (e.g., "New DTC merchant → Zone X, Fill Least Full") accelerate setup. Phase 1 deliberately omits proactive "missing rule" detection because defining what constitutes a "missing" rule requires business context the system lacks. Future phases could add alerts based on merchant master data flags (e.g., `requires_dedicated_zone = TRUE`), but this introduces master data dependencies and false positives that complicate rather than clarify operations.
 
 **Q18: What happens when a location is zone-correct but physically can't fit the item? Won't this cause overrides and mask root causes?**
 
-**Short answer**: Yes—this is a known limitation of Phase 1. Capacity validation is deferred to future phases.
+Yes, this is a known Phase 1 limitation that will cause overrides masking physical incompatibility as the root cause. Consider a 12x20x20-inch bulk item requiring putaway. The engine evaluates constraints (zone, velocity tier) and preferences (utilization, proximity), recommending BIN-C-045, a middle-tier shelf in the correct reserve zone with 80% utilization. The recommendation is strategically correct—reserve zone for slow movers, high utilization for space efficiency. However, BIN-C-045's middle shelf has 15-inch vertical clearance; the 20-inch item physically cannot fit. The stower scans the recommended location, receives a system error or physically observes the mismatch, and overrides to BIN-C-012, a lower-tier shelf with 24-inch clearance. The defect log captures this as a stower override with reason code "BIN_TOO_SMALL," but the trace shows all rules executed correctly—zone matched, utilization prioritized, proximity considered. The defect data doesn't reveal that the root cause is missing dimension validation, not rule misconfiguration.
 
-**The scenario**: A 12x20x20 item needs putaway. The engine recommends a middle-tier shelf (correct zone, correct velocity tier) based on `storage_type = SHELF`. Physically, the item only fits on lower shelves. The stower overrides with reason `BIN_TOO_SMALL`. Defect log shows the override but doesn't indicate the root cause is missing dimension checks.
+Capacity validation is deferred to future phases because it introduces significant data and computational complexity. Volumetric fit requires complete dimension data (length, width, height) for all products and locations, which many warehouses lack, especially for new or infrequent SKUs arriving without full specifications. Beyond dimensions, volumetric fit involves orientation logic (can a 12x20x8 item rotate to 20x12x8?), mixed-SKU stacking calculations (how does the new item fit alongside existing bin contents?), and weight-bearing limits for shelving structures. These calculations are non-trivial and add latency to real-time putaway decisions. Phase 1 assumes locations derived from constraints and preferences can physically accommodate items, relying on SMEs to encode fit logic implicitly through rule configuration.
 
-**Why capacity is out of scope for Phase 1**:
-
-1. **Data dependency**: Requires dimension data (L/W/H) on ALL products AND locations. Many warehouses lack complete dimension data, especially for new/infrequent SKUs.
-
-2. **Complexity**: Volumetric fit involves orientation (can item rotate?), mixed-SKU stacking (how does new item fit with existing contents?), and weight-bearing limits. This is non-trivial calculation.
-
-3. **Implicit workarounds exist**: SMEs can encode fit rules using constraints:
-   - `is_oversized = TRUE` → `storage_type = FLOOR`
-   - `weight > 50kg` → `location_level <= 1`
-   - `pack_type = PALLET` → `storage_type = RACK`
-
-**Mitigation for Phase 1**:
-
-- **Use storage_type granularity**: Instead of generic "SHELF," define `SHELF_LOWER`, `SHELF_MIDDLE`, `SHELF_UPPER` in location master data. Create constraints based on product attributes (e.g., `height > 18" → storage_type IN [SHELF_LOWER, FLOOR]`).
-
-- **Monitor override reasons**: High volumes of `BIN_TOO_SMALL` overrides for specific product categories signal missing constraints. SMEs tune rules accordingly.
-
-**Future enhancement**: Phase 2+ can add volumetric capacity checks using product/location dimensions. The engine would filter out physically incompatible bins in Phase 1 (Constraints) before preferences run.
+Practical mitigations exist for Phase 1 deployments. Instead of generic "SHELF" storage types, define granular types in location master data: `SHELF_LOWER` (0-18" clearance), `SHELF_MIDDLE` (18-36"), `SHELF_UPPER` (36-60"). Configure constraints mapping product attributes to compatible storage types: `height > 18" → storage_type IN [SHELF_LOWER, FLOOR]` or `weight > 50kg → location_level <= 1` for ground-level placement. Monitor defect logs for `BIN_TOO_SMALL` override patterns by product category; high volumes signal missing constraints requiring tuning. For example, if 80% of "Bulk Household" category overrides cite fit issues, create a constraint: `product_category = 'Bulk_Household' → storage_type IN [SHELF_LOWER, FLOOR]`. This approach trades perfect fit validation for operational simplicity, accepting occasional overrides as feedback signals rather than errors. Future phases can introduce volumetric checks in Phase 1 (Constraints) that filter incompatible bins before preferences evaluate candidates, eliminating fit-related overrides at the cost of dimension data requirements and increased system complexity.
 
 **Q19: Doesn't encoding zones in individual rules (vs. merchant-to-zone mapping table) make changes difficult? With hundreds of merchants, updating zones requires touching dozens of rules.**
 
-**Short answer**: Yes—but this is an intentional trade-off favoring flexibility and explicitness over maintenance convenience.
+Yes, this is an intentional trade-off favoring flexibility and operational transparency over maintenance convenience. Consider a warehouse with three merchants sharing Zone 3: Merchant A has 5 rules referencing `zone_id = 'ZONE_3'`, Merchant B has 3 rules, and Merchant C has 8 rules—totaling 16 rules across three merchants. If Zone 3 is renamed to Zone 5 or these merchants relocate during a facility reconfiguration, SMEs must manually update all 16 rules. The risk of partial updates is real: if an SME updates 12 rules but misses 4, the system exhibits inconsistent behavior where some Merchant A products route to Zone 5 (updated rules) while others still target the non-existent Zone 3 (stale rules), causing zero-location defects or operational confusion.
 
-**The concern**:
-- Merchant A has 5 rules referencing `zone_id = ZONE_3`
-- Merchant B has 3 rules referencing `zone_id = ZONE_3`
-- Merchant C has 8 rules referencing `zone_id = ZONE_3`
-- Total: 16 rules across 3 merchants
+This rule-level encoding is chosen over centralized merchant-to-zone mapping tables because it prioritizes explicitness and per-rule flexibility. Each rule is self-contained and human-readable: an SME viewing "Merchant A Units Constraint" sees `zone_id = 'ZONE_3'` directly embedded in the configuration, not `zone_id = LOOKUP(merchant_zone_map, merchant_id)` requiring cross-referencing external tables. Debugging is straightforward—when Merchant A putaway fails, the rule trace shows exactly which zone constraint applied without requiring mapping table inspection. More critically, rule-level encoding supports nuanced logic that mapping tables cannot express. Merchant A might require units to flow to Zone 3 (pick zone), cases to Zone 5 Reserve (bulk storage), and pallets to Zone 6 VNA (vertical narrow aisle). A single merchant-to-zone row in a mapping table cannot encode this pack-type-dependent routing; rule-level configuration naturally supports such complexity through multiple constraints differentiated by product criteria.
 
-If ZONE_3 is renamed or merchants relocate to ZONE_5, SMEs must manually update 16 rules. Risk: Partial updates create inconsistent behavior.
-
-**Why rule-level encoding is chosen**:
-
-1. **Explicitness over indirection**: Each rule is self-contained and readable. An SME viewing "Merchant A Constraint" sees `zone_id = ZONE_3` directly, not `zone_id = LOOKUP(merchant_zone_map, merchant_id)`. Debugging is easier.
-
-2. **Flexibility per rule**: Merchant A might have:
-   - Units → ZONE_3
-   - Cases → ZONE_5_RESERVE
-   - Pallets → ZONE_6_VNA
-
-   A single merchant-to-zone mapping cannot express this. Rule-level configuration supports nuanced logic.
-
-3. **Change frequency is low**: Zone relocations are infrequent (quarterly at most). The cost of bulk rule updates is acceptable for the benefit of rule clarity.
-
-**Mitigation strategies**:
-
-- **Rule naming conventions**: Use consistent naming (e.g., "Merchant_A_Units_Zone3") to enable bulk find-replace in export/import workflows.
-
-- **Bulk edit tooling**: Phase 2+ can add "Update all rules where `zone_id = X` → `zone_id = Y`" bulk operation in the UI.
-
-- **Rule templates**: When onboarding similar merchants, clone rules and update only merchant_id, reducing manual rule creation.
-
-**Alternative architecture (not chosen)**: A merchant-to-zone mapping table would reduce rule count but sacrifice per-rule flexibility and introduce indirection that makes debugging harder. For operations with stable zone assignments and low customization needs, this could be reconsidered in future phases.
-
-**Trade-off**: Favor explicit, self-documenting rules over centralized mappings. Accept higher maintenance cost for complex configurations in exchange for operational transparency.
+Zone relocations are operationally infrequent—quarterly at most for established facilities—making the maintenance cost acceptable in exchange for rule transparency. Mitigation strategies further reduce burden: consistent rule naming conventions like "Merchant_A_Units_Zone3" enable bulk find-replace operations in rule export/import workflows. Future phases can introduce bulk edit tooling where SMEs execute "Update all rules where `zone_id = 'ZONE_3'` → `zone_id = 'ZONE_5'`" in a single operation, eliminating manual per-rule updates. When onboarding similar merchants, SMEs clone existing rule templates and update only merchant_id values, reducing repetitive configuration. For operations with stable zone assignments and low customization needs—such as warehouses with few merchants and simple routing—centralized mapping tables could be reconsidered in future phases, though this sacrifices the flexibility and debuggability that rule-level encoding provides. The design deliberately accepts higher maintenance cost for complex configurations as the price of operational transparency and per-rule expressiveness.
 
 ## Appendix A: Configuration Library (Business Requirements Map)
 
