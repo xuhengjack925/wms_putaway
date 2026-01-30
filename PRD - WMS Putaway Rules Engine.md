@@ -623,6 +623,110 @@ Defect data is high-volume and primarily used for recent trend analysis. Keeping
 
 **Rationale**: Travel distance is an **optimization within constraints**, not a constraint itself. Strategic placement (zones, FEFO, utilization) wins first, then proximity refines the choice among equally good options. This balances warehouse strategy with operational efficiency. Users can still make proximity dominant by placing it as the 1st orderBy if their operation prioritizes speed over strategic placement.
 
+**Q16: What happens when a cart has partial fills (e.g., 12 of 20 items fit in first location)? Won't the engine continue using "Fill Most Full" for remaining items instead of optimizing for proximity?**
+
+**Short answer**: Correct—this is expected behavior that prioritizes business rules over convenience.
+
+**The scenario**: Items 1-12 fill BIN-A-001. Items 13-20 need placement. The engine re-runs for item #13 with `lastPutLocation = BIN-A-001`. If the preference is "Fill Most Full," the engine looks for the highest-utilization bin among valid candidates. If BIN-B-045 (far away) has 95% utilization and BIN-A-002 (adjacent) has 60%, BIN-B-045 wins—unless proximity is in the orderBy stack.
+
+**Why this is correct**: The preference (Fill Most Full) encodes the PRIMARY business objective (space efficiency). Proximity is a SECONDARY optimization via orderBy. If travel efficiency is critical for partial-fill scenarios, configure the rule accordingly:
+
+```
+Preference Priority 1: Cart-based Putaway
+- Product Criteria: (All)
+- Location Criteria: (All Valid)
+- OrderBy: [Proximity to Last Location, Fill Most Full]
+- Cart Consolidation: TRUE
+```
+
+This places proximity FIRST in the orderBy stack, making it the primary sort within valid locations. The system is explicit, not implicit—users configure intent.
+
+**Alternative workflows**: For operations requiring explicit "finish this bin first" logic, use cart consolidation with "Prioritize Same SKU" to attempt sticky-bin behavior before falling back to proximity-optimized alternatives.
+
+**Q17: How does the system detect missing merchant configuration? Without explicit rules, inventory disperses across zones with no warning until defects appear.**
+
+**Short answer**: Detection is reactive via defect logging, not proactive. This is intentional.
+
+**The scenario**: A new merchant onboards. No merchant-specific constraints exist. Generic preferences (e.g., "ABC-A → Golden Zone") apply. Items scatter based on ABC codes without merchant clustering. SMEs discover the issue later through defect review or operational feedback.
+
+**Why reactive detection is preferred**:
+
+1. **Proactive detection requires perfect foresight**: The system cannot know which merchants "should" have rules. Not all merchants need dedicated zones—some share generic space by design.
+
+2. **Defect patterns reveal intent gaps**: If a merchant's inventory triggers high override rates (stowers manually cluster items despite engine recommendations), the defect log surfaces the pattern. SMEs see "Merchant X has 50 overrides this week with reason BETTER_ORGANIZATION" and create a rule.
+
+3. **Configuration governance is a process problem, not a system problem**: Merchant onboarding checklists should include "Create putaway rules if dedicated zone exists." Automation cannot substitute for operational discipline.
+
+**Mitigation strategies**:
+
+- **Onboarding checklist**: Require SMEs to configure constraints for new merchants before first receipt
+- **Defect monitoring**: Set alerts for new `merchant_id` values appearing in override logs
+- **Template rules**: Maintain rule templates for common merchant patterns (e.g., "New DTC merchant → Zone X, Fill Least Full")
+
+**Out of scope for Phase 1**: Proactive "missing rule" detection based on merchant master data. This could be added in future phases if operational need is validated.
+
+**Q18: What happens when a location is zone-correct but physically can't fit the item? Won't this cause overrides and mask root causes?**
+
+**Short answer**: Yes—this is a known limitation of Phase 1. Capacity validation is deferred to future phases.
+
+**The scenario**: A 12x20x20 item needs putaway. The engine recommends a middle-tier shelf (correct zone, correct velocity tier) based on `storage_type = SHELF`. Physically, the item only fits on lower shelves. The stower overrides with reason `BIN_TOO_SMALL`. Defect log shows the override but doesn't indicate the root cause is missing dimension checks.
+
+**Why capacity is out of scope for Phase 1**:
+
+1. **Data dependency**: Requires dimension data (L/W/H) on ALL products AND locations. Many warehouses lack complete dimension data, especially for new/infrequent SKUs.
+
+2. **Complexity**: Volumetric fit involves orientation (can item rotate?), mixed-SKU stacking (how does new item fit with existing contents?), and weight-bearing limits. This is non-trivial calculation.
+
+3. **Implicit workarounds exist**: SMEs can encode fit rules using constraints:
+   - `is_oversized = TRUE` → `storage_type = FLOOR`
+   - `weight > 50kg` → `location_level <= 1`
+   - `pack_type = PALLET` → `storage_type = RACK`
+
+**Mitigation for Phase 1**:
+
+- **Use storage_type granularity**: Instead of generic "SHELF," define `SHELF_LOWER`, `SHELF_MIDDLE`, `SHELF_UPPER` in location master data. Create constraints based on product attributes (e.g., `height > 18" → storage_type IN [SHELF_LOWER, FLOOR]`).
+
+- **Monitor override reasons**: High volumes of `BIN_TOO_SMALL` overrides for specific product categories signal missing constraints. SMEs tune rules accordingly.
+
+**Future enhancement**: Phase 2+ can add volumetric capacity checks using product/location dimensions. The engine would filter out physically incompatible bins in Phase 1 (Constraints) before preferences run.
+
+**Q19: Doesn't encoding zones in individual rules (vs. merchant-to-zone mapping table) make changes difficult? With hundreds of merchants, updating zones requires touching dozens of rules.**
+
+**Short answer**: Yes—but this is an intentional trade-off favoring flexibility and explicitness over maintenance convenience.
+
+**The concern**:
+- Merchant A has 5 rules referencing `zone_id = ZONE_3`
+- Merchant B has 3 rules referencing `zone_id = ZONE_3`
+- Merchant C has 8 rules referencing `zone_id = ZONE_3`
+- Total: 16 rules across 3 merchants
+
+If ZONE_3 is renamed or merchants relocate to ZONE_5, SMEs must manually update 16 rules. Risk: Partial updates create inconsistent behavior.
+
+**Why rule-level encoding is chosen**:
+
+1. **Explicitness over indirection**: Each rule is self-contained and readable. An SME viewing "Merchant A Constraint" sees `zone_id = ZONE_3` directly, not `zone_id = LOOKUP(merchant_zone_map, merchant_id)`. Debugging is easier.
+
+2. **Flexibility per rule**: Merchant A might have:
+   - Units → ZONE_3
+   - Cases → ZONE_5_RESERVE
+   - Pallets → ZONE_6_VNA
+
+   A single merchant-to-zone mapping cannot express this. Rule-level configuration supports nuanced logic.
+
+3. **Change frequency is low**: Zone relocations are infrequent (quarterly at most). The cost of bulk rule updates is acceptable for the benefit of rule clarity.
+
+**Mitigation strategies**:
+
+- **Rule naming conventions**: Use consistent naming (e.g., "Merchant_A_Units_Zone3") to enable bulk find-replace in export/import workflows.
+
+- **Bulk edit tooling**: Phase 2+ can add "Update all rules where `zone_id = X` → `zone_id = Y`" bulk operation in the UI.
+
+- **Rule templates**: When onboarding similar merchants, clone rules and update only merchant_id, reducing manual rule creation.
+
+**Alternative architecture (not chosen)**: A merchant-to-zone mapping table would reduce rule count but sacrifice per-rule flexibility and introduce indirection that makes debugging harder. For operations with stable zone assignments and low customization needs, this could be reconsidered in future phases.
+
+**Trade-off**: Favor explicit, self-documenting rules over centralized mappings. Accept higher maintenance cost for complex configurations in exchange for operational transparency.
+
 ## Appendix A: Configuration Library (Business Requirements Map)
 
 This section maps specific business requirements into the PRD format.
